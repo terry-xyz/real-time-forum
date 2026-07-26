@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"real-time-forum/database"
 	"real-time-forum/models"
 
 	"github.com/gorilla/websocket"
@@ -27,7 +28,7 @@ type testClient struct {
 func newTestClient(t *testing.T) (*testClient, *sql.DB) {
 	t.Helper()
 
-	db, err := InitDB(":memory:")
+	db, err := database.InitDB(":memory:")
 	if err != nil {
 		t.Fatalf("InitDB: %v", err)
 	}
@@ -326,7 +327,7 @@ func TestEmptyCollectionsSerializeAsArrays(t *testing.T) {
 		t.Fatalf("comments = %#v, want empty", comments)
 	}
 
-	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := database.CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
@@ -344,15 +345,15 @@ func TestChatUsersSortByRecentConversationThenAlphabeticallyForNewUsers(t *testi
 
 	alice := registerAndLogin(t, c, "Alice")
 	aliceID := int(alice["user"].(map[string]any)["id"].(float64))
-	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := database.CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
-	carolID, err := CreateUser(db, models.RegistrationInput{Nickname: "Carol", Age: 31, Gender: "female", FirstName: "Carol", LastName: "Gamma", Email: "carol@example.com", Password: "password123"})
+	carolID, err := database.CreateUser(db, models.RegistrationInput{Nickname: "Carol", Age: 31, Gender: "female", FirstName: "Carol", LastName: "Gamma", Email: "carol@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create carol: %v", err)
 	}
-	if _, err := CreateMessage(db, carolID, aliceID, "latest", time.Now().Add(time.Minute)); err != nil {
+	if _, err := database.CreateMessage(db, carolID, aliceID, "latest", time.Now().Add(time.Minute)); err != nil {
 		t.Fatalf("create message: %v", err)
 	}
 
@@ -369,12 +370,12 @@ func TestMessagesReturnLatestTenAndOlderPages(t *testing.T) {
 
 	alice := registerAndLogin(t, c, "Alice")
 	aliceID := int(alice["user"].(map[string]any)["id"].(float64))
-	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := database.CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
 	for i := 1; i <= 25; i++ {
-		if _, err := CreateMessage(db, aliceID, bobID, "message "+strconv.Itoa(i), time.Now().Add(time.Duration(i)*time.Second)); err != nil {
+		if _, err := database.CreateMessage(db, aliceID, bobID, "message "+strconv.Itoa(i), time.Now().Add(time.Duration(i)*time.Second)); err != nil {
 			t.Fatalf("create message %d: %v", i, err)
 		}
 	}
@@ -395,7 +396,7 @@ func TestMessagesReturnEmptyArrayForNewConversation(t *testing.T) {
 	c, db := newTestClient(t)
 
 	registerAndLogin(t, c, "Alice")
-	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := database.CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
@@ -419,7 +420,7 @@ func TestWebSocketDeliversPrivateMessagesInRealTime(t *testing.T) {
 	c2 := &testClient{server: c1.server, client: c2Client}
 
 	alice := registerAndLogin(t, c1, "Alice")
-	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := database.CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
