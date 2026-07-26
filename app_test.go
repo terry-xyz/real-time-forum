@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"real-time-forum/database"
+	"real-time-forum/handlers"
 	"real-time-forum/models"
 
 	"github.com/gorilla/websocket"
@@ -33,7 +34,7 @@ func newTestClient(t *testing.T) (*testClient, *sql.DB) {
 		t.Fatalf("InitDB: %v", err)
 	}
 
-	app := NewApp(db)
+	app := handlers.NewApp(db)
 	server := httptest.NewServer(app.Routes())
 	jar, err := cookiejar.New(nil)
 	if err != nil {
