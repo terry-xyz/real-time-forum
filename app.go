@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"real-time-forum/models"
+
 	"github.com/gorilla/websocket"
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/crypto/bcrypt"
@@ -31,53 +33,6 @@ var errUnauthorized = errors.New("unauthorized")
 type App struct {
 	db  *sql.DB
 	hub *Hub
-}
-
-type RegistrationInput struct {
-	Nickname  string `json:"nickname"`
-	Age       int    `json:"age"`
-	Gender    string `json:"gender"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Email     string `json:"email"`
-	Password  string `json:"password"`
-}
-
-type User struct {
-	ID        int        `json:"id"`
-	Nickname  string     `json:"nickname"`
-	Age       int        `json:"age,omitempty"`
-	Gender    string     `json:"gender,omitempty"`
-	FirstName string     `json:"first_name,omitempty"`
-	LastName  string     `json:"last_name,omitempty"`
-	Email     string     `json:"email,omitempty"`
-	Online    bool       `json:"online,omitempty"`
-	LastChat  *time.Time `json:"last_message_at,omitempty"`
-}
-
-type Post struct {
-	ID         int       `json:"id"`
-	Title      string    `json:"title"`
-	Content    string    `json:"content"`
-	Author     User      `json:"author"`
-	Categories []string  `json:"categories"`
-	CreatedAt  time.Time `json:"created_at"`
-}
-
-type Comment struct {
-	ID        int       `json:"id"`
-	PostID    int       `json:"post_id"`
-	Content   string    `json:"content"`
-	Author    User      `json:"author"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-type Message struct {
-	ID        int       `json:"id"`
-	From      User      `json:"from"`
-	To        User      `json:"to"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
 }
 
 func NewApp(db *sql.DB) *App {
@@ -209,7 +164,7 @@ CREATE INDEX IF NOT EXISTS idx_comments_post ON comments(post_id, created_at ASC
 CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages(sender_id, receiver_id, id DESC);
 `
 
-func CreateUser(db *sql.DB, input RegistrationInput) (int, error) {
+func CreateUser(db *sql.DB, input models.RegistrationInput) (int, error) {
 	normalized, err := validateRegistration(input)
 	if err != nil {
 		return 0, err
@@ -235,7 +190,7 @@ func CreateUser(db *sql.DB, input RegistrationInput) (int, error) {
 	return int(id), err
 }
 
-func validateRegistration(input RegistrationInput) (RegistrationInput, error) {
+func validateRegistration(input models.RegistrationInput) (models.RegistrationInput, error) {
 	input.Nickname = strings.TrimSpace(input.Nickname)
 	input.Gender = strings.TrimSpace(input.Gender)
 	input.FirstName = strings.TrimSpace(input.FirstName)
@@ -307,7 +262,7 @@ func (a *App) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	var input RegistrationInput
+	var input models.RegistrationInput
 	if !decodeJSON(w, r, &input) {
 		return
 	}
@@ -542,15 +497,15 @@ func (a *App) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (a *App) currentUser(r *http.Request) (User, error) {
+func (a *App) currentUser(r *http.Request) (models.User, error) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
-		return User{}, errUnauthorized
+		return models.User{}, errUnauthorized
 	}
 	var userID int
 	err = a.db.QueryRow(`SELECT user_id FROM sessions WHERE id = ? AND datetime(expires_at) > datetime('now')`, cookie.Value).Scan(&userID)
 	if err != nil {
-		return User{}, errUnauthorized
+		return models.User{}, errUnauthorized
 	}
 	return userByID(a.db, userID)
 }
@@ -584,8 +539,8 @@ func sessionCookie(r *http.Request, value string, maxAge int) *http.Cookie {
 	}
 }
 
-func userByIdentifier(db *sql.DB, identifier string) (User, string, error) {
-	var user User
+func userByIdentifier(db *sql.DB, identifier string) (models.User, string, error) {
+	var user models.User
 	var passwordHash string
 	err := db.QueryRow(
 		`SELECT id, nickname, age, gender, first_name, last_name, email, password_hash FROM users WHERE lower(nickname) = lower(?) OR lower(email) = lower(?)`,
@@ -593,19 +548,19 @@ func userByIdentifier(db *sql.DB, identifier string) (User, string, error) {
 		identifier,
 	).Scan(&user.ID, &user.Nickname, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email, &passwordHash)
 	if errors.Is(err, sql.ErrNoRows) {
-		return User{}, "", nil
+		return models.User{}, "", nil
 	}
 	return user, passwordHash, err
 }
 
-func userByID(db *sql.DB, id int) (User, error) {
-	var user User
+func userByID(db *sql.DB, id int) (models.User, error) {
+	var user models.User
 	err := db.QueryRow(`SELECT id, nickname, age, gender, first_name, last_name, email FROM users WHERE id = ?`, id).
 		Scan(&user.ID, &user.Nickname, &user.Age, &user.Gender, &user.FirstName, &user.LastName, &user.Email)
 	return user, err
 }
 
-func publicUser(user User) User {
+func publicUser(user models.User) models.User {
 	user.Email = ""
 	user.Age = 0
 	user.Gender = ""
@@ -614,42 +569,42 @@ func publicUser(user User) User {
 	return user
 }
 
-func createPost(db *sql.DB, authorID int, title string, content string, categoryIDs []int) (Post, error) {
+func createPost(db *sql.DB, authorID int, title string, content string, categoryIDs []int) (models.Post, error) {
 	title = strings.TrimSpace(title)
 	content = strings.TrimSpace(content)
 	if title == "" || content == "" || len(categoryIDs) == 0 {
-		return Post{}, errors.New("title, content, and at least one category are required")
+		return models.Post{}, errors.New("title, content, and at least one category are required")
 	}
 	tx, err := db.Begin()
 	if err != nil {
-		return Post{}, err
+		return models.Post{}, err
 	}
 	defer tx.Rollback()
 	result, err := tx.Exec(`INSERT INTO posts (author_id, title, content) VALUES (?, ?, ?)`, authorID, title, content)
 	if err != nil {
-		return Post{}, err
+		return models.Post{}, err
 	}
 	postID64, err := result.LastInsertId()
 	if err != nil {
-		return Post{}, err
+		return models.Post{}, err
 	}
 	postID := int(postID64)
 	for _, categoryID := range uniquePositive(categoryIDs) {
 		if _, err := tx.Exec(`INSERT INTO post_categories (post_id, category_id) VALUES (?, ?)`, postID, categoryID); err != nil {
-			return Post{}, err
+			return models.Post{}, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return Post{}, err
+		return models.Post{}, err
 	}
 	posts, err := listPostByID(db, postID)
 	if err != nil {
-		return Post{}, err
+		return models.Post{}, err
 	}
 	return posts, nil
 }
 
-func listPosts(db *sql.DB) ([]Post, error) {
+func listPosts(db *sql.DB) ([]models.Post, error) {
 	rows, err := db.Query(`
 		SELECT p.id, p.title, p.content, p.created_at, u.id, u.nickname, COALESCE(group_concat(c.name, '|'), '')
 		FROM posts p
@@ -663,9 +618,9 @@ func listPosts(db *sql.DB) ([]Post, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	posts := make([]Post, 0)
+	posts := make([]models.Post, 0)
 	for rows.Next() {
-		var post Post
+		var post models.Post
 		var createdAt string
 		var categories string
 		if err := rows.Scan(&post.ID, &post.Title, &post.Content, &createdAt, &post.Author.ID, &post.Author.Nickname, &categories); err != nil {
@@ -681,8 +636,8 @@ func listPosts(db *sql.DB) ([]Post, error) {
 	return posts, rows.Err()
 }
 
-func listPostByID(db *sql.DB, postID int) (Post, error) {
-	var post Post
+func listPostByID(db *sql.DB, postID int) (models.Post, error) {
+	var post models.Post
 	var createdAt string
 	var categories string
 	err := db.QueryRow(`
@@ -695,11 +650,11 @@ func listPostByID(db *sql.DB, postID int) (Post, error) {
 		GROUP BY p.id, p.title, p.content, p.created_at, u.id, u.nickname
 	`, postID).Scan(&post.ID, &post.Title, &post.Content, &createdAt, &post.Author.ID, &post.Author.Nickname, &categories)
 	if err != nil {
-		return Post{}, err
+		return models.Post{}, err
 	}
 	post.CreatedAt, err = parseDBTime(createdAt)
 	if err != nil {
-		return Post{}, err
+		return models.Post{}, err
 	}
 	post.Categories = splitCategories(categories)
 	return post, nil
@@ -718,32 +673,32 @@ func uniquePositive(ids []int) []int {
 	return out
 }
 
-func createComment(db *sql.DB, authorID int, postID int, content string) (Comment, error) {
+func createComment(db *sql.DB, authorID int, postID int, content string) (models.Comment, error) {
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return Comment{}, errors.New("comment cannot be empty")
+		return models.Comment{}, errors.New("comment cannot be empty")
 	}
 	result, err := db.Exec(`INSERT INTO comments (post_id, author_id, content) VALUES (?, ?, ?)`, postID, authorID, content)
 	if err != nil {
-		return Comment{}, err
+		return models.Comment{}, err
 	}
 	id, err := result.LastInsertId()
 	if err != nil {
-		return Comment{}, err
+		return models.Comment{}, err
 	}
 	comments, err := listComments(db, postID)
 	if err != nil {
-		return Comment{}, err
+		return models.Comment{}, err
 	}
 	for _, comment := range comments {
 		if comment.ID == int(id) {
 			return comment, nil
 		}
 	}
-	return Comment{}, sql.ErrNoRows
+	return models.Comment{}, sql.ErrNoRows
 }
 
-func listComments(db *sql.DB, postID int) ([]Comment, error) {
+func listComments(db *sql.DB, postID int) ([]models.Comment, error) {
 	rows, err := db.Query(`
 		SELECT c.id, c.post_id, c.content, c.created_at, u.id, u.nickname
 		FROM comments c
@@ -755,9 +710,9 @@ func listComments(db *sql.DB, postID int) ([]Comment, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	comments := make([]Comment, 0)
+	comments := make([]models.Comment, 0)
 	for rows.Next() {
-		var comment Comment
+		var comment models.Comment
 		var createdAt string
 		if err := rows.Scan(&comment.ID, &comment.PostID, &comment.Content, &createdAt, &comment.Author.ID, &comment.Author.Nickname); err != nil {
 			return nil, err
@@ -771,7 +726,7 @@ func listComments(db *sql.DB, postID int) ([]Comment, error) {
 	return comments, rows.Err()
 }
 
-func chatUsers(db *sql.DB, currentUserID int, online map[int]bool) ([]User, error) {
+func chatUsers(db *sql.DB, currentUserID int, online map[int]bool) ([]models.User, error) {
 	rows, err := db.Query(`
 		SELECT u.id, u.nickname, MAX(m.created_at) AS last_message_at
 		FROM users u
@@ -787,9 +742,9 @@ func chatUsers(db *sql.DB, currentUserID int, online map[int]bool) ([]User, erro
 		return nil, err
 	}
 	defer rows.Close()
-	users := make([]User, 0)
+	users := make([]models.User, 0)
 	for rows.Next() {
-		var user User
+		var user models.User
 		var last sql.NullString
 		if err := rows.Scan(&user.ID, &user.Nickname, &last); err != nil {
 			return nil, err
@@ -807,19 +762,19 @@ func chatUsers(db *sql.DB, currentUserID int, online map[int]bool) ([]User, erro
 	return users, rows.Err()
 }
 
-func createMessageModel(db *sql.DB, fromID int, toID int, content string, createdAt time.Time) (Message, error) {
+func createMessageModel(db *sql.DB, fromID int, toID int, content string, createdAt time.Time) (models.Message, error) {
 	id, err := CreateMessage(db, fromID, toID, content, createdAt)
 	if err != nil {
-		return Message{}, err
+		return models.Message{}, err
 	}
 	messages, err := listMessagesByIDs(db, []int{id})
 	if err != nil || len(messages) == 0 {
-		return Message{}, err
+		return models.Message{}, err
 	}
 	return messages[0], nil
 }
 
-func listMessages(db *sql.DB, currentUserID int, otherUserID int, beforeID int, limit int) ([]Message, error) {
+func listMessages(db *sql.DB, currentUserID int, otherUserID int, beforeID int, limit int) ([]models.Message, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 10
 	}
@@ -859,10 +814,10 @@ func listMessages(db *sql.DB, currentUserID int, otherUserID int, beforeID int, 
 	return listMessagesByIDs(db, ids)
 }
 
-func listMessagesByIDs(db *sql.DB, ids []int) ([]Message, error) {
-	messages := make([]Message, 0, len(ids))
+func listMessagesByIDs(db *sql.DB, ids []int) ([]models.Message, error) {
+	messages := make([]models.Message, 0, len(ids))
 	for _, id := range ids {
-		var message Message
+		var message models.Message
 		var createdAt string
 		err := db.QueryRow(`
 			SELECT m.id, m.content, m.created_at,

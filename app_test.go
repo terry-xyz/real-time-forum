@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"real-time-forum/models"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -324,7 +326,7 @@ func TestEmptyCollectionsSerializeAsArrays(t *testing.T) {
 		t.Fatalf("comments = %#v, want empty", comments)
 	}
 
-	bobID, err := CreateUser(db, RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
@@ -342,11 +344,11 @@ func TestChatUsersSortByRecentConversationThenAlphabeticallyForNewUsers(t *testi
 
 	alice := registerAndLogin(t, c, "Alice")
 	aliceID := int(alice["user"].(map[string]any)["id"].(float64))
-	bobID, err := CreateUser(db, RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
-	carolID, err := CreateUser(db, RegistrationInput{Nickname: "Carol", Age: 31, Gender: "female", FirstName: "Carol", LastName: "Gamma", Email: "carol@example.com", Password: "password123"})
+	carolID, err := CreateUser(db, models.RegistrationInput{Nickname: "Carol", Age: 31, Gender: "female", FirstName: "Carol", LastName: "Gamma", Email: "carol@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create carol: %v", err)
 	}
@@ -367,7 +369,7 @@ func TestMessagesReturnLatestTenAndOlderPages(t *testing.T) {
 
 	alice := registerAndLogin(t, c, "Alice")
 	aliceID := int(alice["user"].(map[string]any)["id"].(float64))
-	bobID, err := CreateUser(db, RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
@@ -393,7 +395,7 @@ func TestMessagesReturnEmptyArrayForNewConversation(t *testing.T) {
 	c, db := newTestClient(t)
 
 	registerAndLogin(t, c, "Alice")
-	bobID, err := CreateUser(db, RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "Male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
@@ -417,7 +419,7 @@ func TestWebSocketDeliversPrivateMessagesInRealTime(t *testing.T) {
 	c2 := &testClient{server: c1.server, client: c2Client}
 
 	alice := registerAndLogin(t, c1, "Alice")
-	bobID, err := CreateUser(db, RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
+	bobID, err := CreateUser(db, models.RegistrationInput{Nickname: "Bob", Age: 30, Gender: "male", FirstName: "Bob", LastName: "Beta", Email: "bob@example.com", Password: "password123"})
 	if err != nil {
 		t.Fatalf("create bob: %v", err)
 	}
