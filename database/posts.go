@@ -11,6 +11,7 @@ import (
 func CreatePost(db *sql.DB, authorID int, title string, content string, categoryIDs []int) (models.Post, error) {
 	title = strings.TrimSpace(title)
 	content = strings.TrimSpace(content)
+	categoryIDs = uniquePositive(categoryIDs)
 	if title == "" || content == "" || len(categoryIDs) == 0 {
 		return models.Post{}, errors.New("title, content, and at least one category are required")
 	}
@@ -28,7 +29,7 @@ func CreatePost(db *sql.DB, authorID int, title string, content string, category
 		return models.Post{}, err
 	}
 	postID := int(postID64)
-	for _, categoryID := range uniquePositive(categoryIDs) {
+	for _, categoryID := range categoryIDs {
 		if _, err := tx.Exec(`INSERT INTO post_categories (post_id, category_id) VALUES (?, ?)`, postID, categoryID); err != nil {
 			return models.Post{}, err
 		}

@@ -292,6 +292,17 @@ func TestPostsAndCommentsRequireLoginAndAreReadableFromFeed(t *testing.T) {
 	}
 }
 
+func TestPostCreationRejectsInvalidCategoryIDs(t *testing.T) {
+	c, _ := newTestClient(t)
+
+	registerAndLogin(t, c, "Grace")
+	c.postJSON(t, "/api/posts", map[string]any{
+		"title":        "Invalid category",
+		"content":      "This should not create an uncategorized post",
+		"category_ids": []int{0},
+	}, http.StatusBadRequest)
+}
+
 func TestEmptyCollectionsSerializeAsArrays(t *testing.T) {
 	c, db := newTestClient(t)
 
