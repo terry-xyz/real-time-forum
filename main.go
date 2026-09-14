@@ -20,6 +20,9 @@ func main() {
 	mux.HandleFunc("/api/login", handlers.LoginHandler)
 	mux.HandleFunc("/api/logout", handlers.LogoutHandler)
 	mux.HandleFunc("/api/check-auth", handlers.CheckAuthHandler)
+	mux.HandleFunc("/api/categories", handlers.CategoriesHandler)
+	mux.HandleFunc("/api/posts", handlers.PostsHandler)
+	mux.HandleFunc("/api/comments", handlers.CommentsHandler)
 
 	// Serve Frontend (SPA)
 	fs := http.FileServer(http.Dir("./static"))
