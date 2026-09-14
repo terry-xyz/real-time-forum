@@ -141,7 +141,7 @@ func LoginHandler(w http.ResponseWriter, r *http.Request) {
 // LogoutHandler removes session from database and clears cookie
 func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
-	if err != nil {
+	if err == nil {
 		database.DB.Exec(`DELETE FROM sessions WHERE id = ?`, cookie.Value)
 	}
 
@@ -160,7 +160,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request) {
 
 // CheckAuthHandler verifies session status on page reloads
 func CheckAuthHandler(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie("session_tokn")
+	cookie, err := r.Cookie("session_token")
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
