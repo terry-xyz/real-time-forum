@@ -34,14 +34,14 @@ function showLogin() {
         <form id="login-form">
             <input
                 type="text"
-                id="login-identifier"
+                id="login"
                 placeholder="Nickname or email"
                 required
             >
 
             <input
                 type="password"
-                id="login-password"
+                id="password"
                 placeholder="Password"
                 required
             >
@@ -58,6 +58,37 @@ function showLogin() {
 }
 
 async function login(event) {
+    event.preventDefault();
+
+    const login = document.getElementById("login").value;
+    const password = document.getElementById("password").value;
+    const message = document.getElementById("login-message");
+
+    try {
+        const response = await fetch("/api/login", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                login: login,
+                password: password
+            })
+        });
+
+        const text = await response.text();
+        if (!response.ok) {
+            message.textContent = text;
+            return;
+        }
+
+        const data = JSON.parse(text);
+        message.textContent = data.message;
+
+    } catch (error) {
+        console.error("Login error:", error);
+        message.textContent = "Something went wrong.";
+    }
 }
 
 document
