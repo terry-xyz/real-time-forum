@@ -1,6 +1,19 @@
 const app = document.getElementById("app");
+let currentUser = null;
+
+function updateNavigation() {
+    const loggedIn = currentUser !== null;
+    document.getElementById("login-button").hidden = loggedIn;
+    document.getElementById("register-button").hidden = loggedIn;
+    document.getElementById("logout-button").hidden = !loggedIn;
+}
 
 async function loadPosts() {
+    if (!currentUser) {
+        showLogin();
+        return;
+    }
+
     const response = await fetch("/api/posts");
 
     if (!response.ok) {
@@ -133,18 +146,57 @@ async function login(event) {
             })
         });
 
-        const text = await response.text();
         if (!response.ok) {
-            message.textContent = text;
+            message.textContent = (await response.text()).trim();
             return;
         }
 
-        const data = JSON.parse(text);
-        message.textContent = data.message;
+        const data = await response.json();
+        currentUser = data.user;
+        updateNavigation();
+        await loadPosts();
 
     } catch (error) {
         console.error("Login error:", error);
         message.textContent = "Something went wrong.";
+    }
+}
+
+async function logout() {
+    try {
+        const response = await fetch("/api/logout", { method: "POST" });
+        if (!response.ok) {
+            app.textContent = "Logout failed. Please try again.";
+            return;
+        }
+
+        currentUser = null;
+        updateNavigation();
+        showLogin();
+    } catch (error) {
+        console.error("Logout error:", error);
+        app.textContent = "Logout failed. Please try again.";
+    }
+}
+
+async function restoreSession() {
+    try {
+        const response = await fetch("/api/check-auth");
+        if (!response.ok) {
+            currentUser = null;
+            updateNavigation();
+            showLogin();
+            return;
+        }
+
+        currentUser = await response.json();
+        updateNavigation();
+        await loadPosts();
+    } catch (error) {
+        console.error("Session check error:", error);
+        currentUser = null;
+        updateNavigation();
+        showLogin();
     }
 }
 
@@ -159,3 +211,9 @@ document
 document
     .getElementById("register-button")
     .addEventListener("click", showRegister)
+
+document
+    .getElementById("logout-button")
+    .addEventListener("click", logout)
+
+restoreSession();
