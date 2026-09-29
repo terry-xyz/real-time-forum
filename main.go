@@ -23,6 +23,7 @@ func main() {
 	mux.HandleFunc("/api/categories", handlers.CategoriesHandler)
 	mux.HandleFunc("/api/posts", handlers.PostsHandler)
 	mux.HandleFunc("/api/comments", handlers.CommentsHandler)
+	mux.HandleFunc("/api/messages", handlers.MessagesHandler)
 
 	// Serve Frontend (SPA)
 	fs := http.FileServer(http.Dir("./static"))

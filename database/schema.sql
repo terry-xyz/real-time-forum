@@ -65,3 +65,8 @@ CREATE TABLE IF NOT EXISTS messages (
     FOREIGN KEY(sender_id) REFERENCES users(id),
     FOREIGN KEY(receiver_id) REFERENCES users(id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver_created
+    ON messages(sender_id, receiver_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_messages_receiver_sender_created
+    ON messages(receiver_id, sender_id, created_at, id);
