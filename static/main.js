@@ -52,15 +52,100 @@ async function loadPosts() {
         const content = document.createElement("p");
         const author = document.createElement("small");
         const categories = document.createElement("p");
+        const commentsButton = document.createElement("button");
+        const commentsSection = document.createElement("section");
 
         title.textContent = post.title;
         content.textContent = post.content;
         author.textContent = `Posted by ${post.author}`;
         categories.textContent = `Categories: ${(post.categories || []).join(", ")}`;
-        article.append(title, content, author, categories);
+        commentsButton.type = "button";
+        commentsButton.textContent = "Show comments";
+        commentsSection.hidden = true;
+        commentsSection.innerHTML = `
+            <div class="comment-list"></div>
+            <form class="comment-form">
+                <textarea placeholder="Write a comment" required></textarea>
+                <button type="submit">Add comment</button>
+            </form>
+            <p class="comment-message"></p>
+        `;
+
+        commentsButton.addEventListener("click", async () => {
+            commentsSection.hidden = !commentsSection.hidden;
+            commentsButton.textContent = commentsSection.hidden ? "Show comments" : "Hide comments";
+            if (!commentsSection.hidden) {
+                await loadComments(post, commentsSection);
+            }
+        });
+        commentsSection
+            .querySelector(".comment-form")
+            .addEventListener("submit", event => addComment(event, post, commentsSection));
+
+        article.append(title, content, author, categories, commentsButton, commentsSection);
 
         postList.appendChild(article);
     });
+}
+
+async function loadComments(post, commentsSection) {
+    const list = commentsSection.querySelector(".comment-list");
+
+    try {
+        const response = await fetch(`/api/comments?post_id=${encodeURIComponent(post.id)}`);
+        if (!response.ok) {
+            list.textContent = "Failed to load comments.";
+            return;
+        }
+
+        const comments = await response.json();
+        list.textContent = "";
+        if (comments.length === 0) {
+            list.textContent = "No comments yet.";
+            return;
+        }
+
+        comments.forEach(comment => {
+            const item = document.createElement("p");
+            item.textContent = `${comment.author}: ${comment.content}`;
+            list.appendChild(item);
+        });
+    } catch (error) {
+        console.error("Comment loading error:", error);
+        list.textContent = "Failed to load comments.";
+    }
+}
+
+async function addComment(event, post, commentsSection) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+    const message = commentsSection.querySelector(".comment-message");
+
+    try {
+        const response = await fetch("/api/comments", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                post_id: post.id,
+                content: form.querySelector("textarea").value
+            })
+        });
+
+        if (!response.ok) {
+            message.textContent = (await response.text()).trim();
+            return;
+        }
+
+        form.reset();
+        message.textContent = "";
+        await loadComments(post, commentsSection);
+    } catch (error) {
+        console.error("Comment submission error:", error);
+        message.textContent = "Something went wrong.";
+    }
 }
 
 async function createPost(event) {
