@@ -15,3 +15,9 @@ type CreateMessageRequest struct {
 	ReceiverID string `json:"receiver_id"`
 	Content    string `json:"content"`
 }
+
+type ChatUser struct {
+	ID            string  `json:"id"`
+	Nickname      string  `json:"nickname"`
+	LastMessageAt *string `json:"last_message_at"`
+}
