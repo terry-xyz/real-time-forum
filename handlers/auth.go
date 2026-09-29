@@ -29,9 +29,13 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Basic Validation
 	req.Nickname = strings.TrimSpace(req.Nickname)
+	req.Gender = strings.TrimSpace(req.Gender)
+	req.FirstName = strings.TrimSpace(req.FirstName)
+	req.LastName = strings.TrimSpace(req.LastName)
 	req.Email = strings.TrimSpace(strings.ToLower(req.Email))
 
-	if req.Nickname == "" || req.Email == "" || req.Password == "" || req.Age <= 0 {
+	if req.Nickname == "" || req.Email == "" || req.Password == "" || req.Age <= 0 ||
+		req.Gender == "" || req.FirstName == "" || req.LastName == "" {
 		http.Error(w, "Missing required fields or invalid age", http.StatusBadRequest)
 		return
 	}
