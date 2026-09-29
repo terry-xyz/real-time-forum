@@ -10,3 +10,8 @@ type Message struct {
 	Content    string    `json:"content"`
 	CreatedAt  time.Time `json:"created_at"`
 }
+
+type CreateMessageRequest struct {
+	ReceiverID string `json:"receiver_id"`
+	Content    string `json:"content"`
+}

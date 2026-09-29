@@ -5,19 +5,29 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"real-time-forum/database"
 	"real-time-forum/models"
+
+	"github.com/gofrs/uuid"
 )
 
 const maxMessagesPerPage = 10
 
-// MessagesHandler returns one private conversation in chronological order.
+// MessagesHandler loads conversation history or stores a new message.
 func MessagesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+	switch r.Method {
+	case http.MethodGet:
+		getMessages(w, r)
+	case http.MethodPost:
+		createMessage(w, r)
+	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 	}
+}
+
+func getMessages(w http.ResponseWriter, r *http.Request) {
 
 	user, err := getUserFromSession(r)
 	if err != nil {
@@ -108,4 +118,72 @@ func MessagesHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(messages)
+}
+
+func createMessage(w http.ResponseWriter, r *http.Request) {
+	user, err := getUserFromSession(r)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req models.CreateMessageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+		return
+	}
+	req.ReceiverID = strings.TrimSpace(req.ReceiverID)
+	req.Content = strings.TrimSpace(req.Content)
+	if req.ReceiverID == "" || req.Content == "" {
+		http.Error(w, "Receiver ID and message content are required", http.StatusBadRequest)
+		return
+	}
+	if req.ReceiverID == user.ID {
+		http.Error(w, "Cannot send a message to yourself", http.StatusBadRequest)
+		return
+	}
+
+	var existingPeerID string
+	err = database.DB.QueryRow(`SELECT id FROM users WHERE id = ?`, req.ReceiverID).Scan(&existingPeerID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Recipient not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error", http.StatusInternalServerError)
+		return
+	}
+
+	messageID, err := uuid.NewV4()
+	if err != nil {
+		http.Error(w, "Server error", http.StatusInternalServerError)
+		return
+	}
+	_, err = database.DB.Exec(`
+		INSERT INTO messages (id, sender_id, receiver_id, content)
+		VALUES (?, ?, ?, ?)
+	`, messageID.String(), user.ID, req.ReceiverID, req.Content)
+	if err != nil {
+		http.Error(w, "Failed to save message", http.StatusInternalServerError)
+		return
+	}
+
+	var message models.Message
+	err = database.DB.QueryRow(`
+		SELECT m.id, m.sender_id, sender.nickname, m.receiver_id, m.content, m.created_at
+		FROM messages m
+		JOIN users sender ON sender.id = m.sender_id
+		WHERE m.id = ?
+	`, messageID.String()).Scan(
+		&message.ID, &message.SenderID, &message.SenderName,
+		&message.ReceiverID, &message.Content, &message.CreatedAt,
+	)
+	if err != nil {
+		http.Error(w, "Failed to load saved message", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(message)
 }
