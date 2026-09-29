@@ -23,19 +23,78 @@ async function loadPosts() {
 
     const posts = await response.json();
 
-    app.innerHTML = "";
+    app.innerHTML = `
+        <section>
+            <h2>Create a post</h2>
+            <form id="post-form">
+                <input type="text" id="post-title" placeholder="Title" required>
+                <textarea id="post-content" placeholder="Write your post" required></textarea>
+                <input type="text" id="post-categories" placeholder="Categories, separated by commas" required>
+                <button type="submit">Create post</button>
+            </form>
+            <p id="post-message"></p>
+        </section>
+        <section>
+            <h2>Posts</h2>
+            <div id="post-list"></div>
+        </section>
+    `;
+
+    document
+        .getElementById("post-form")
+        .addEventListener("submit", createPost);
+
+    const postList = document.getElementById("post-list");
 
     posts.forEach(post => {
         const article = document.createElement("article");
+        const title = document.createElement("h3");
+        const content = document.createElement("p");
+        const author = document.createElement("small");
+        const categories = document.createElement("p");
 
-        article.innerHTML = `
-            <h2>${post.title}</h2>
-            <p>${post.content}</p>
-            <small>Posted by ${post.author}</small>
-        `;
+        title.textContent = post.title;
+        content.textContent = post.content;
+        author.textContent = `Posted by ${post.author}`;
+        categories.textContent = `Categories: ${(post.categories || []).join(", ")}`;
+        article.append(title, content, author, categories);
 
-        app.appendChild(article);
+        postList.appendChild(article);
     });
+}
+
+async function createPost(event) {
+    event.preventDefault();
+
+    const message = document.getElementById("post-message");
+    const categories = document.getElementById("post-categories").value
+        .split(",")
+        .map(category => category.trim())
+        .filter(category => category !== "");
+
+    try {
+        const response = await fetch("/api/posts", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                title: document.getElementById("post-title").value,
+                content: document.getElementById("post-content").value,
+                categories
+            })
+        });
+
+        if (!response.ok) {
+            message.textContent = (await response.text()).trim();
+            return;
+        }
+
+        await loadPosts();
+    } catch (error) {
+        console.error("Post creation error:", error);
+        message.textContent = "Something went wrong.";
+    }
 }
 
 function showLogin() {
