@@ -1,5 +1,6 @@
 const app = document.getElementById("app");
 let currentUser = null;
+let selectedChatUser = null;
 
 function updateNavigation() {
     const loggedIn = currentUser !== null;
@@ -24,20 +25,34 @@ async function loadPosts() {
     const posts = await response.json();
 
     app.innerHTML = `
-        <section>
-            <h2>Create a post</h2>
-            <form id="post-form">
-                <input type="text" id="post-title" placeholder="Title" required>
-                <textarea id="post-content" placeholder="Write your post" required></textarea>
-                <input type="text" id="post-categories" placeholder="Categories, separated by commas" required>
-                <button type="submit">Create post</button>
-            </form>
-            <p id="post-message"></p>
-        </section>
-        <section>
-            <h2>Posts</h2>
-            <div id="post-list"></div>
-        </section>
+        <div class="signed-in-layout">
+            <div class="forum-column">
+                <section>
+                    <h2>Create a post</h2>
+                    <form id="post-form">
+                        <input type="text" id="post-title" placeholder="Title" required>
+                        <textarea id="post-content" placeholder="Write your post" required></textarea>
+                        <input type="text" id="post-categories" placeholder="Categories, separated by commas" required>
+                        <button type="submit">Create post</button>
+                    </form>
+                    <p id="post-message"></p>
+                </section>
+                <section>
+                    <h2>Posts</h2>
+                    <div id="post-list"></div>
+                </section>
+            </div>
+            <div class="chat-layout">
+                <aside class="chat-user-panel">
+                    <h2>Chats</h2>
+                    <div id="chat-user-list">Loading users...</div>
+                </aside>
+                <section class="chat-conversation-panel" aria-live="polite">
+                    <h2 id="chat-title">Choose a user to view messages</h2>
+                    <div id="chat-message-list" class="chat-message-list"></div>
+                </section>
+            </div>
+        </div>
     `;
 
     document
@@ -86,6 +101,103 @@ async function loadPosts() {
 
         postList.appendChild(article);
     });
+
+    await loadChatUsers();
+}
+
+async function loadChatUsers() {
+    const list = document.getElementById("chat-user-list");
+    if (!list) return;
+
+    try {
+        const response = await fetch("/api/chat/users");
+        if (!response.ok) {
+            list.textContent = "Failed to load users.";
+            return;
+        }
+
+        const users = await response.json();
+        list.textContent = "";
+        if (users.length === 0) {
+            list.textContent = "No other users yet.";
+            selectedChatUser = null;
+            document.getElementById("chat-title").textContent = "Choose a user to view messages";
+            document.getElementById("chat-message-list").textContent = "";
+            return;
+        }
+
+        users.forEach(user => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "chat-user-button";
+            button.dataset.userId = user.id;
+            button.textContent = user.nickname;
+            button.classList.toggle("selected", selectedChatUser?.id === user.id);
+            button.addEventListener("click", () => openConversation(user));
+            list.appendChild(button);
+        });
+
+        if (selectedChatUser) {
+            const currentUserStillExists = users.find(user => user.id === selectedChatUser.id);
+            if (currentUserStillExists) {
+                selectedChatUser = currentUserStillExists;
+                await openConversation(selectedChatUser);
+            } else {
+                selectedChatUser = null;
+            }
+        }
+    } catch (error) {
+        console.error("Chat user loading error:", error);
+        list.textContent = "Failed to load users.";
+    }
+}
+
+async function openConversation(user) {
+    selectedChatUser = user;
+    document.getElementById("chat-title").textContent = user.nickname;
+    document.getElementById("chat-message-list").textContent = "Loading messages...";
+    document.querySelectorAll(".chat-user-button").forEach(button => {
+        button.classList.toggle("selected", button.dataset.userId === user.id);
+    });
+
+    try {
+        const response = await fetch(`/api/messages?with=${encodeURIComponent(user.id)}&limit=10`);
+        if (selectedChatUser?.id !== user.id) return;
+
+        const list = document.getElementById("chat-message-list");
+        if (!response.ok) {
+            list.textContent = "Failed to load messages.";
+            return;
+        }
+
+        const messages = await response.json();
+        list.textContent = "";
+        if (messages.length === 0) {
+            list.textContent = "No messages yet.";
+            return;
+        }
+
+        messages.forEach(message => {
+            const item = document.createElement("article");
+            item.className = "chat-message";
+            const heading = document.createElement("div");
+            const sender = document.createElement("strong");
+            const date = document.createElement("time");
+            const content = document.createElement("p");
+
+            sender.textContent = message.sender_name;
+            date.dateTime = message.created_at;
+            date.textContent = new Date(message.created_at).toLocaleString();
+            content.textContent = message.content;
+            heading.append(sender, date);
+            item.append(heading, content);
+            list.appendChild(item);
+        });
+        list.scrollTop = list.scrollHeight;
+    } catch (error) {
+        console.error("Conversation loading error:", error);
+        document.getElementById("chat-message-list").textContent = "Failed to load messages.";
+    }
 }
 
 async function loadComments(post, commentsSection) {

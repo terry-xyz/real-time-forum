@@ -1,0 +1,158 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    color: #20242a;
+    font-family: Arial, sans-serif;
+}
+
+header {
+    align-items: center;
+    background: #f2f4f7;
+    display: flex;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+}
+
+nav {
+    display: flex;
+    gap: 0.5rem;
+}
+
+main {
+    margin: 1.25rem auto;
+    max-width: 1500px;
+    padding: 0 1rem;
+}
+
+button,
+input,
+textarea {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+    padding: 0.45rem 0.7rem;
+}
+
+input,
+textarea {
+    display: block;
+    margin: 0.5rem 0;
+    max-width: 100%;
+    padding: 0.55rem;
+    width: 100%;
+}
+
+textarea {
+    min-height: 5rem;
+    resize: vertical;
+}
+
+.signed-in-layout {
+    align-items: start;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(280px, 0.9fr) minmax(480px, 1.4fr);
+}
+
+.forum-column > section,
+.chat-layout {
+    border: 1px solid #d8dde5;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+    padding: 1rem;
+}
+
+.chat-layout {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(130px, 0.65fr) minmax(260px, 1.35fr);
+    min-height: 28rem;
+}
+
+.chat-user-panel {
+    border-right: 1px solid #d8dde5;
+    padding-right: 0.75rem;
+}
+
+.chat-user-button {
+    background: transparent;
+    border: 0;
+    border-radius: 0.3rem;
+    display: block;
+    margin: 0.2rem 0;
+    overflow-wrap: anywhere;
+    text-align: left;
+    width: 100%;
+}
+
+.chat-user-button:hover,
+.chat-user-button.selected {
+    background: #e8eef7;
+}
+
+.chat-conversation-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.chat-message-list {
+    flex: 1;
+    max-height: 32rem;
+    min-height: 18rem;
+    overflow-y: auto;
+}
+
+.chat-message {
+    border-bottom: 1px solid #e5e8ed;
+    padding: 0.65rem 0;
+}
+
+.chat-message > div {
+    align-items: baseline;
+    display: flex;
+    gap: 0.75rem;
+    justify-content: space-between;
+}
+
+.chat-message time,
+.chat-message small {
+    color: #656d78;
+    font-size: 0.8rem;
+}
+
+.chat-message p {
+    margin-bottom: 0;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+}
+
+@media (max-width: 900px) {
+    .signed-in-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 580px) {
+    header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .chat-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .chat-user-panel {
+        border-bottom: 1px solid #d8dde5;
+        border-right: 0;
+        padding-bottom: 0.75rem;
+        padding-right: 0;
+    }
+}
