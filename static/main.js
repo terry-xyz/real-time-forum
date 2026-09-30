@@ -1,6 +1,7 @@
 const app = document.getElementById("app");
 let currentUser = null;
 let selectedChatUser = null;
+let chatSocket = null;
 let hasOlderMessages = false;
 let loadingOlderMessages = false;
 let lastOlderMessagesLoadAt = 0;
@@ -10,6 +11,27 @@ function updateNavigation() {
     document.getElementById("login-button").hidden = loggedIn;
     document.getElementById("register-button").hidden = loggedIn;
     document.getElementById("logout-button").hidden = !loggedIn;
+}
+
+function connectChatSocket() {
+    if (chatSocket?.readyState === WebSocket.OPEN || chatSocket?.readyState === WebSocket.CONNECTING) {
+        return;
+    }
+
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const socket = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
+    chatSocket = socket;
+    socket.addEventListener("close", () => {
+        if (chatSocket === socket) chatSocket = null;
+    });
+    socket.addEventListener("error", error => {
+        console.error("Chat connection error:", error);
+    });
+}
+
+function closeChatSocket() {
+    chatSocket?.close();
+    chatSocket = null;
 }
 
 async function loadPosts(category = "") {
@@ -540,6 +562,7 @@ async function login(event) {
 
         const data = await response.json();
         currentUser = data.user;
+        connectChatSocket();
         updateNavigation();
         await loadPosts();
 
@@ -558,6 +581,7 @@ async function logout() {
         }
 
         currentUser = null;
+        closeChatSocket();
         updateNavigation();
         showLogin();
     } catch (error) {
@@ -571,17 +595,20 @@ async function restoreSession() {
         const response = await fetch("/api/check-auth");
         if (!response.ok) {
             currentUser = null;
+            closeChatSocket();
             updateNavigation();
             showLogin();
             return;
         }
 
         currentUser = await response.json();
+        connectChatSocket();
         updateNavigation();
         await loadPosts();
     } catch (error) {
         console.error("Session check error:", error);
         currentUser = null;
+        closeChatSocket();
         updateNavigation();
         showLogin();
     }

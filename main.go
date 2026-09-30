@@ -25,6 +25,7 @@ func main() {
 	mux.HandleFunc("/api/comments", handlers.CommentsHandler)
 	mux.HandleFunc("/api/chat/users", handlers.ChatUsersHandler)
 	mux.HandleFunc("/api/messages", handlers.MessagesHandler)
+	mux.HandleFunc("/api/ws", handlers.WebSocketHandler)
 
 	// Serve Frontend (SPA)
 	fs := http.FileServer(http.Dir("./static"))
