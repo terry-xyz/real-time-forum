@@ -9,13 +9,14 @@ function updateNavigation() {
     document.getElementById("logout-button").hidden = !loggedIn;
 }
 
-async function loadPosts() {
+async function loadPosts(category = "") {
     if (!currentUser) {
         showLogin();
         return;
     }
 
-    const response = await fetch("/api/posts");
+    const categoryQuery = category ? `?category=${encodeURIComponent(category)}` : "";
+    const response = await fetch(`/api/posts${categoryQuery}`);
 
     if (!response.ok) {
         app.innerHTML = "<p>Failed to load posts.</p>";
@@ -39,6 +40,10 @@ async function loadPosts() {
                 </section>
                 <section>
                     <h2>Posts</h2>
+                    <label for="post-category-filter">Filter by category</label>
+                    <select id="post-category-filter">
+                        <option value="">All categories</option>
+                    </select>
                     <div id="post-list"></div>
                 </section>
             </div>
@@ -70,6 +75,24 @@ async function loadPosts() {
     document
         .getElementById("load-older-messages")
         .addEventListener("click", loadOlderMessages);
+
+    const categoryFilter = document.getElementById("post-category-filter");
+    categoryFilter.addEventListener("change", () => loadPosts(categoryFilter.value));
+    try {
+        const response = await fetch("/api/categories");
+        if (response.ok) {
+            const categories = await response.json();
+            categories.forEach(category => {
+                const option = document.createElement("option");
+                option.value = category.name;
+                option.textContent = category.name;
+                categoryFilter.appendChild(option);
+            });
+        }
+        categoryFilter.value = category;
+    } catch (error) {
+        console.error("Category loading error:", error);
+    }
 
     const postList = document.getElementById("post-list");
 
@@ -551,7 +574,7 @@ async function restoreSession() {
 
 document
     .getElementById("home-button")
-    .addEventListener("click", loadPosts);
+    .addEventListener("click", () => loadPosts());
 
 document
     .getElementById("login-button")
