@@ -50,6 +50,11 @@ async function loadPosts() {
                 <section class="chat-conversation-panel" aria-live="polite">
                     <h2 id="chat-title">Choose a user to view messages</h2>
                     <div id="chat-message-list" class="chat-message-list"></div>
+                    <form id="message-form">
+                        <textarea id="message-content" placeholder="Write a message" required></textarea>
+                        <button type="submit">Send message</button>
+                    </form>
+                    <p id="message-status"></p>
                 </section>
             </div>
         </div>
@@ -58,6 +63,9 @@ async function loadPosts() {
     document
         .getElementById("post-form")
         .addEventListener("submit", createPost);
+    document
+        .getElementById("message-form")
+        .addEventListener("submit", sendMessage);
 
     const postList = document.getElementById("post-list");
 
@@ -197,6 +205,42 @@ async function openConversation(user) {
     } catch (error) {
         console.error("Conversation loading error:", error);
         document.getElementById("chat-message-list").textContent = "Failed to load messages.";
+    }
+}
+
+async function sendMessage(event) {
+    event.preventDefault();
+
+    const status = document.getElementById("message-status");
+    if (!selectedChatUser) {
+        status.textContent = "Choose a user first.";
+        return;
+    }
+
+    const form = event.currentTarget;
+    try {
+        const response = await fetch("/api/messages", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                receiver_id: selectedChatUser.id,
+                content: document.getElementById("message-content").value
+            })
+        });
+
+        if (!response.ok) {
+            status.textContent = (await response.text()).trim();
+            return;
+        }
+
+        form.reset();
+        status.textContent = "";
+        await loadChatUsers();
+    } catch (error) {
+        console.error("Message sending error:", error);
+        status.textContent = "Something went wrong.";
     }
 }
 
