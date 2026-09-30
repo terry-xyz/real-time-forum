@@ -49,6 +49,7 @@ async function loadPosts() {
                 </aside>
                 <section class="chat-conversation-panel" aria-live="polite">
                     <h2 id="chat-title">Choose a user to view messages</h2>
+                    <button id="load-older-messages" type="button" hidden>Load older messages</button>
                     <div id="chat-message-list" class="chat-message-list"></div>
                     <form id="message-form">
                         <textarea id="message-content" placeholder="Write a message" required></textarea>
@@ -66,6 +67,9 @@ async function loadPosts() {
     document
         .getElementById("message-form")
         .addEventListener("submit", sendMessage);
+    document
+        .getElementById("load-older-messages")
+        .addEventListener("click", loadOlderMessages);
 
     const postList = document.getElementById("post-list");
 
@@ -163,7 +167,10 @@ async function loadChatUsers() {
 async function openConversation(user) {
     selectedChatUser = user;
     document.getElementById("chat-title").textContent = user.nickname;
-    document.getElementById("chat-message-list").textContent = "Loading messages...";
+    const list = document.getElementById("chat-message-list");
+    const olderMessagesButton = document.getElementById("load-older-messages");
+    olderMessagesButton.hidden = true;
+    list.textContent = "Loading messages...";
     document.querySelectorAll(".chat-user-button").forEach(button => {
         button.classList.toggle("selected", button.dataset.userId === user.id);
     });
@@ -172,7 +179,6 @@ async function openConversation(user) {
         const response = await fetch(`/api/messages?with=${encodeURIComponent(user.id)}&limit=10`);
         if (selectedChatUser?.id !== user.id) return;
 
-        const list = document.getElementById("chat-message-list");
         if (!response.ok) {
             list.textContent = "Failed to load messages.";
             return;
@@ -185,26 +191,69 @@ async function openConversation(user) {
             return;
         }
 
-        messages.forEach(message => {
-            const item = document.createElement("article");
-            item.className = "chat-message";
-            const heading = document.createElement("div");
-            const sender = document.createElement("strong");
-            const date = document.createElement("time");
-            const content = document.createElement("p");
-
-            sender.textContent = message.sender_name;
-            date.dateTime = message.created_at;
-            date.textContent = new Date(message.created_at).toLocaleString();
-            content.textContent = message.content;
-            heading.append(sender, date);
-            item.append(heading, content);
-            list.appendChild(item);
-        });
+        messages.forEach(message => list.appendChild(createChatMessage(message)));
+        olderMessagesButton.hidden = messages.length < 10;
         list.scrollTop = list.scrollHeight;
     } catch (error) {
         console.error("Conversation loading error:", error);
         document.getElementById("chat-message-list").textContent = "Failed to load messages.";
+    }
+}
+
+function createChatMessage(message) {
+    const item = document.createElement("article");
+    item.className = "chat-message";
+    item.dataset.messageId = message.id;
+    const heading = document.createElement("div");
+    const sender = document.createElement("strong");
+    const date = document.createElement("time");
+    const content = document.createElement("p");
+
+    sender.textContent = message.sender_name;
+    date.dateTime = message.created_at;
+    date.textContent = new Date(message.created_at).toLocaleString();
+    content.textContent = message.content;
+    heading.append(sender, date);
+    item.append(heading, content);
+    return item;
+}
+
+async function loadOlderMessages() {
+    const user = selectedChatUser;
+    const list = document.getElementById("chat-message-list");
+    const button = document.getElementById("load-older-messages");
+    const oldestMessage = list.querySelector(".chat-message");
+    if (!user || !oldestMessage) return;
+
+    button.disabled = true;
+    try {
+        const response = await fetch(
+            `/api/messages?with=${encodeURIComponent(user.id)}&limit=10&before_id=${encodeURIComponent(oldestMessage.dataset.messageId)}`
+        );
+        if (selectedChatUser?.id !== user.id) return;
+
+        if (!response.ok) {
+            document.getElementById("message-status").textContent = (await response.text()).trim();
+            return;
+        }
+
+        const messages = await response.json();
+        if (messages.length === 0) {
+            button.hidden = true;
+            return;
+        }
+
+        const previousHeight = list.scrollHeight;
+        messages.slice().reverse().forEach(message => {
+            list.insertBefore(createChatMessage(message), list.firstChild);
+        });
+        list.scrollTop += list.scrollHeight - previousHeight;
+        button.hidden = messages.length < 10;
+    } catch (error) {
+        console.error("Older message loading error:", error);
+        document.getElementById("message-status").textContent = "Failed to load older messages.";
+    } finally {
+        button.disabled = false;
     }
 }
 

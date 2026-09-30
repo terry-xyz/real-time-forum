@@ -68,7 +68,7 @@ func getMessages(w http.ResponseWriter, r *http.Request) {
 	beforeTime := ""
 	if beforeID != "" {
 		err = database.DB.QueryRow(`
-			SELECT created_at FROM messages
+			SELECT CAST(created_at AS TEXT) FROM messages
 			WHERE id = ?
 			  AND ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
 		`, beforeID, user.ID, peerID, peerID, user.ID).Scan(&beforeTime)
