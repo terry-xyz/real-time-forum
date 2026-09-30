@@ -1,6 +1,9 @@
 const app = document.getElementById("app");
 let currentUser = null;
 let selectedChatUser = null;
+let hasOlderMessages = false;
+let loadingOlderMessages = false;
+let lastOlderMessagesLoadAt = 0;
 
 function updateNavigation() {
     const loggedIn = currentUser !== null;
@@ -54,7 +57,6 @@ async function loadPosts(category = "") {
                 </aside>
                 <section class="chat-conversation-panel" aria-live="polite">
                     <h2 id="chat-title">Choose a user to view messages</h2>
-                    <button id="load-older-messages" type="button" hidden>Load older messages</button>
                     <div id="chat-message-list" class="chat-message-list"></div>
                     <form id="message-form">
                         <textarea id="message-content" placeholder="Write a message" required></textarea>
@@ -73,8 +75,8 @@ async function loadPosts(category = "") {
         .getElementById("message-form")
         .addEventListener("submit", sendMessage);
     document
-        .getElementById("load-older-messages")
-        .addEventListener("click", loadOlderMessages);
+        .getElementById("chat-message-list")
+        .addEventListener("scroll", handleChatScroll);
 
     const categoryFilter = document.getElementById("post-category-filter");
     categoryFilter.addEventListener("change", () => loadPosts(categoryFilter.value));
@@ -191,8 +193,7 @@ async function openConversation(user) {
     selectedChatUser = user;
     document.getElementById("chat-title").textContent = user.nickname;
     const list = document.getElementById("chat-message-list");
-    const olderMessagesButton = document.getElementById("load-older-messages");
-    olderMessagesButton.hidden = true;
+    hasOlderMessages = false;
     list.textContent = "Loading messages...";
     document.querySelectorAll(".chat-user-button").forEach(button => {
         button.classList.toggle("selected", button.dataset.userId === user.id);
@@ -215,12 +216,27 @@ async function openConversation(user) {
         }
 
         messages.forEach(message => list.appendChild(createChatMessage(message)));
-        olderMessagesButton.hidden = messages.length < 10;
+        hasOlderMessages = messages.length === 10;
         list.scrollTop = list.scrollHeight;
     } catch (error) {
         console.error("Conversation loading error:", error);
         document.getElementById("chat-message-list").textContent = "Failed to load messages.";
     }
+}
+
+function handleChatScroll(event) {
+    const now = Date.now();
+    if (
+        event.currentTarget.scrollTop > 0 ||
+        !hasOlderMessages ||
+        loadingOlderMessages ||
+        now - lastOlderMessagesLoadAt < 300
+    ) {
+        return;
+    }
+
+    lastOlderMessagesLoadAt = now;
+    loadOlderMessages();
 }
 
 function createChatMessage(message) {
@@ -244,11 +260,10 @@ function createChatMessage(message) {
 async function loadOlderMessages() {
     const user = selectedChatUser;
     const list = document.getElementById("chat-message-list");
-    const button = document.getElementById("load-older-messages");
     const oldestMessage = list.querySelector(".chat-message");
     if (!user || !oldestMessage) return;
 
-    button.disabled = true;
+    loadingOlderMessages = true;
     try {
         const response = await fetch(
             `/api/messages?with=${encodeURIComponent(user.id)}&limit=10&before_id=${encodeURIComponent(oldestMessage.dataset.messageId)}`
@@ -262,7 +277,7 @@ async function loadOlderMessages() {
 
         const messages = await response.json();
         if (messages.length === 0) {
-            button.hidden = true;
+            hasOlderMessages = false;
             return;
         }
 
@@ -271,12 +286,12 @@ async function loadOlderMessages() {
             list.insertBefore(createChatMessage(message), list.firstChild);
         });
         list.scrollTop += list.scrollHeight - previousHeight;
-        button.hidden = messages.length < 10;
+        hasOlderMessages = messages.length === 10;
     } catch (error) {
         console.error("Older message loading error:", error);
         document.getElementById("message-status").textContent = "Failed to load older messages.";
     } finally {
-        button.disabled = false;
+        loadingOlderMessages = false;
     }
 }
 
