@@ -182,6 +182,7 @@ func createMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to load saved message", http.StatusInternalServerError)
 		return
 	}
+	chatHub.sendMessage(message.ReceiverID, message)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)

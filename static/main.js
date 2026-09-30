@@ -24,9 +24,33 @@ function connectChatSocket() {
     socket.addEventListener("close", () => {
         if (chatSocket === socket) chatSocket = null;
     });
+    socket.addEventListener("message", handleChatSocketMessage);
     socket.addEventListener("error", error => {
         console.error("Chat connection error:", error);
     });
+}
+
+function handleChatSocketMessage(event) {
+    let data;
+    try {
+        data = JSON.parse(event.data);
+    } catch (error) {
+        console.error("Invalid chat event:", error);
+        return;
+    }
+    if (data.type !== "message") return;
+
+    const message = data.message;
+    if (selectedChatUser?.id === message.sender_id) {
+        const list = document.getElementById("chat-message-list");
+        const wasAtBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+        list.appendChild(createChatMessage(message));
+        if (wasAtBottom) list.scrollTop = list.scrollHeight;
+    } else {
+        document.getElementById("message-status").textContent = `New message from ${message.sender_name}`;
+    }
+
+    loadChatUsers(false);
 }
 
 function closeChatSocket() {
@@ -164,7 +188,7 @@ async function loadPosts(category = "") {
     await loadChatUsers();
 }
 
-async function loadChatUsers() {
+async function loadChatUsers(reloadSelectedConversation = true) {
     const list = document.getElementById("chat-user-list");
     if (!list) return;
 
@@ -200,7 +224,9 @@ async function loadChatUsers() {
             const currentUserStillExists = users.find(user => user.id === selectedChatUser.id);
             if (currentUserStillExists) {
                 selectedChatUser = currentUserStillExists;
-                await openConversation(selectedChatUser);
+                if (reloadSelectedConversation) {
+                    await openConversation(selectedChatUser);
+                }
             } else {
                 selectedChatUser = null;
             }
