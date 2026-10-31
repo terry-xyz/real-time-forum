@@ -214,7 +214,10 @@ async function loadChatUsers(reloadSelectedConversation = true) {
             button.type = "button";
             button.className = "chat-user-button";
             button.dataset.userId = user.id;
-            button.textContent = user.nickname;
+            const presence = document.createElement("span");
+            presence.className = `presence-indicator ${user.online ? "online" : "offline"}`;
+            presence.setAttribute("aria-label", user.online ? "Online" : "Offline");
+            button.append(presence, document.createTextNode(user.nickname));
             button.classList.toggle("selected", selectedChatUser?.id === user.id);
             button.addEventListener("click", () => openConversation(user));
             list.appendChild(button);

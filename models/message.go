@@ -20,4 +20,5 @@ type ChatUser struct {
 	ID            string  `json:"id"`
 	Nickname      string  `json:"nickname"`
 	LastMessageAt *string `json:"last_message_at"`
+	Online        bool    `json:"online"`
 }

@@ -53,6 +53,7 @@ func ChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 		if lastMessageAt.Valid {
 			chatUser.LastMessageAt = &lastMessageAt.String
 		}
+		chatUser.Online = chatHub.isOnline(chatUser.ID)
 		users = append(users, chatUser)
 	}
 	if err := rows.Err(); err != nil {

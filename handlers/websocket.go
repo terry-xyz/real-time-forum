@@ -83,6 +83,12 @@ func (hub *chatConnectionHub) unregister(userID string, client *chatConnection) 
 	client.writeMu.Unlock()
 }
 
+func (hub *chatConnectionHub) isOnline(userID string) bool {
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+	return len(hub.connections[userID]) > 0
+}
+
 func (hub *chatConnectionHub) sendMessage(userID string, message models.Message) {
 	hub.mu.RLock()
 	clients := make([]*chatConnection, 0, len(hub.connections[userID]))

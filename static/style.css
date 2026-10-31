@@ -95,6 +95,19 @@ textarea {
     background: #e8eef7;
 }
 
+.presence-indicator {
+    background: #7b8493;
+    border-radius: 50%;
+    display: inline-block;
+    height: 0.55rem;
+    margin-right: 0.5rem;
+    width: 0.55rem;
+}
+
+.presence-indicator.online {
+    background: #27834a;
+}
+
 .chat-conversation-panel {
     display: flex;
     flex-direction: column;
