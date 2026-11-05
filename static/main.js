@@ -2,6 +2,7 @@ const app = document.getElementById("app");
 let currentUser = null;
 let selectedChatUser = null;
 let chatSocket = null;
+let typingStatusTimeout = null;
 let hasOlderMessages = false;
 let loadingOlderMessages = false;
 let lastOlderMessagesLoadAt = 0;
@@ -36,6 +37,18 @@ function handleChatSocketMessage(event) {
         data = JSON.parse(event.data);
     } catch (error) {
         console.error("Invalid chat event:", error);
+        return;
+    }
+    if (data.type === "typing") {
+        if (selectedChatUser?.id !== data.sender_id) return;
+
+        const typingStatus = document.getElementById("typing-status");
+        if (!typingStatus) return;
+        typingStatus.textContent = `${selectedChatUser.nickname} is typing...`;
+        clearTimeout(typingStatusTimeout);
+        typingStatusTimeout = setTimeout(() => {
+            typingStatus.textContent = "";
+        }, 1500);
         return;
     }
     if (data.type !== "message") return;
@@ -104,6 +117,7 @@ async function loadPosts(category = "") {
                 <section class="chat-conversation-panel" aria-live="polite">
                     <h2 id="chat-title">Choose a user to view messages</h2>
                     <div id="chat-message-list" class="chat-message-list"></div>
+                    <p id="typing-status"></p>
                     <form id="message-form">
                         <textarea id="message-content" placeholder="Write a message" required></textarea>
                         <button type="submit">Send message</button>
@@ -120,6 +134,9 @@ async function loadPosts(category = "") {
     document
         .getElementById("message-form")
         .addEventListener("submit", sendMessage);
+    document
+        .getElementById("message-content")
+        .addEventListener("input", updateTypingStatus);
     document
         .getElementById("chat-message-list")
         .addEventListener("scroll", handleChatScroll);
@@ -242,6 +259,8 @@ async function loadChatUsers(reloadSelectedConversation = true) {
 
 async function openConversation(user) {
     selectedChatUser = user;
+    clearTimeout(typingStatusTimeout);
+    document.getElementById("typing-status").textContent = "";
     document.getElementById("chat-title").textContent = user.nickname;
     const list = document.getElementById("chat-message-list");
     hasOlderMessages = false;
@@ -380,6 +399,19 @@ async function sendMessage(event) {
         console.error("Message sending error:", error);
         status.textContent = "Something went wrong.";
     }
+}
+
+function updateTypingStatus() {
+    const recipient = selectedChatUser;
+    if (!recipient || chatSocket?.readyState !== WebSocket.OPEN) return;
+
+    const content = document.getElementById("message-content").value;
+    if (!content.trim()) return;
+
+    chatSocket.send(JSON.stringify({
+        type: "typing",
+        receiver_id: recipient.id
+    }));
 }
 
 async function loadComments(post, commentsSection) {

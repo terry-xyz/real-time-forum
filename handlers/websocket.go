@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
@@ -21,12 +22,18 @@ type chatConnectionHub struct {
 }
 
 type websocketEvent struct {
-	Type    string         `json:"type"`
-	Message models.Message `json:"message"`
+	Type     string          `json:"type"`
+	SenderID string          `json:"sender_id,omitempty"`
+	Message  *models.Message `json:"message,omitempty"`
 }
 
 var chatHub = chatConnectionHub{
 	connections: make(map[string]map[*chatConnection]struct{}),
+}
+
+type incomingEvent struct {
+	Type       string `json:"type"`
+	ReceiverID string `json:"receiver_id"`
 }
 
 var websocketUpgrader = websocket.Upgrader{
@@ -53,9 +60,21 @@ func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	defer chatHub.unregister(user.ID, client)
 
 	for {
-		if _, _, err := conn.ReadMessage(); err != nil {
+		_, payload, err := conn.ReadMessage()
+		if err != nil {
 			return
 		}
+
+		var event incomingEvent
+		if err := json.Unmarshal(payload, &event); err != nil {
+			continue
+		}
+
+		if event.Type != "typing" || event.ReceiverID == "" {
+			continue
+		}
+
+		chatHub.sendTyping(event.ReceiverID, user.ID)
 	}
 }
 
@@ -100,7 +119,26 @@ func (hub *chatConnectionHub) sendMessage(userID string, message models.Message)
 	for _, client := range clients {
 		client.writeMu.Lock()
 		client.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		err := client.conn.WriteJSON(websocketEvent{Type: "message", Message: message})
+		err := client.conn.WriteJSON(websocketEvent{Type: "message", Message: &message})
+		client.writeMu.Unlock()
+		if err != nil {
+			hub.unregister(userID, client)
+		}
+	}
+}
+
+func (hub *chatConnectionHub) sendTyping(userID, senderID string) {
+	hub.mu.RLock()
+	clients := make([]*chatConnection, 0, len(hub.connections[userID]))
+	for client := range hub.connections[userID] {
+		clients = append(clients, client)
+	}
+	hub.mu.RUnlock()
+
+	for _, client := range clients {
+		client.writeMu.Lock()
+		client.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		err := client.conn.WriteJSON(websocketEvent{Type: "typing", SenderID: senderID})
 		client.writeMu.Unlock()
 		if err != nil {
 			hub.unregister(userID, client)
