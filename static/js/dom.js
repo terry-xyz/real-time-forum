@@ -74,3 +74,14 @@ export function autoGrow(textarea) {
     textarea.style.height = "auto";
     textarea.style.height = `${textarea.scrollHeight}px`;
 }
+
+let toastTimeout = null;
+
+// showToast replaces the shared feedback and gives each new message its full display duration.
+export function showToast(text) {
+    const toast = $("toast");
+    toast.textContent = text;
+    toast.hidden = false;
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { toast.hidden = true; }, 3500);
+}
