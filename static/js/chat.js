@@ -15,8 +15,8 @@ let userRefreshVersion = 0;
 let chatUsers = [];
 let selectedChatUser = null;
 let loadingInitialMessages = false;
-const bufferedMessages = new Map();
-const renderedMessageIds = new Set();
+const conversationMessages = new Map();
+let historyCursorId = null;
 let pendingSend = null;
 let chatSocket = null;
 let typingStatusTimeout = null;
@@ -213,8 +213,8 @@ function closeConversation() {
     selectedChatUser = null;
     conversationVersion += 1;
     loadingInitialMessages = false;
-    bufferedMessages.clear();
-    renderedMessageIds.clear();
+    conversationMessages.clear();
+    historyCursorId = null;
     hasOlderMessages = false;
     loadingOlderMessages = false;
     lastOlderMessagesLoadAt = 0;
@@ -244,8 +244,8 @@ async function openConversation(user) {
     const conversation = ++conversationVersion;
     state.unreadUserIds.delete(user.id);
     loadingInitialMessages = true;
-    bufferedMessages.clear();
-    renderedMessageIds.clear();
+    conversationMessages.clear();
+    historyCursorId = null;
     hasOlderMessages = false;
     loadingOlderMessages = false;
     lastOlderMessagesLoadAt = 0;
@@ -285,30 +285,38 @@ async function openConversation(user) {
 
 // finishInitialHistory merges live events with the initial snapshot so neither can erase the other.
 function finishInitialHistory(history, user, errorText = "") {
-    const messagesById = new Map(history.map(message => [String(message.id), message]));
-    for (const [id, message] of bufferedMessages) messagesById.set(id, message);
-    // Buffered events can precede the snapshot, so match the backend's timestamp and string-ID order.
-    const messages = [...messagesById.values()].sort((left, right) => {
-        const timeDifference = Date.parse(left.created_at) - Date.parse(right.created_at);
-        if (timeDifference !== 0) return timeDifference;
-        return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
-    });
+    mergeConversationMessages(history);
+    // Only server pages advance pagination; a buffered event can sort before unloaded server history.
+    historyCursorId = history[0]?.id ?? null;
     loadingInitialMessages = false;
-    bufferedMessages.clear();
     hasOlderMessages = !errorText && history.length === MESSAGE_PAGE_SIZE;
 
     const list = $("chat-message-list");
-    if (messages.length === 0) {
+    if (conversationMessages.size === 0) {
         list.replaceChildren(errorText
             ? el("p", { text: errorText })
             : el("p", { className: "chat-empty", text: `No messages yet. Say hi to ${user.nickname}!` }));
         return;
     }
-    list.replaceChildren(...messages.map(createChatMessage));
-    for (const message of messages) renderedMessageIds.add(String(message.id));
+    renderConversationMessages();
     if (errorText) $("message-status").textContent = errorText;
-    updateOlderHint();
     list.scrollTop = list.scrollHeight;
+}
+
+// mergeConversationMessages deduplicates server pages and buffered live events by their message IDs.
+function mergeConversationMessages(messages) {
+    for (const message of messages) conversationMessages.set(String(message.id), message);
+}
+
+// renderConversationMessages orders the full merged history like the backend before restoring its hint.
+function renderConversationMessages() {
+    const messages = [...conversationMessages.values()].sort((left, right) => {
+        const timeDifference = Date.parse(left.created_at) - Date.parse(right.created_at);
+        if (timeDifference !== 0) return timeDifference;
+        return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+    });
+    $("chat-message-list").replaceChildren(...messages.map(createChatMessage));
+    updateOlderHint();
 }
 
 // createChatMessage preserves full local timestamps and safe text for sender names and content.
@@ -330,17 +338,15 @@ function createChatMessage(message) {
 // appendChatMessage follows incoming messages only near the bottom and always follows sent messages.
 function appendChatMessage(message) {
     const id = String(message.id);
-    if (loadingInitialMessages) {
-        bufferedMessages.set(id, message);
-        return;
-    }
-    if (renderedMessageIds.has(id)) return;
-    renderedMessageIds.add(id);
+    if (conversationMessages.has(id)) return;
+    conversationMessages.set(id, message);
+    if (loadingInitialMessages) return;
     const list = $("chat-message-list");
-    list.querySelector(".chat-empty")?.remove();
+    const previousScrollTop = list.scrollTop;
     const wasAtBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
-    list.append(createChatMessage(message));
+    renderConversationMessages();
     if (wasAtBottom || message.sender_id === state.currentUser?.id) list.scrollTop = list.scrollHeight;
+    else list.scrollTop = previousScrollTop;
 }
 
 // updateOlderHint ensures short histories overflow so scrolling to the top can request another page.
@@ -380,20 +386,19 @@ function handleChatScroll(event) {
     loadOlderMessages();
 }
 
-// loadOlderMessages prepends the previous page while preserving the reader's scroll position.
+// loadOlderMessages advances the server-page cursor and merges older history without shifting the view.
 async function loadOlderMessages() {
     const user = selectedChatUser;
     const session = sessionVersion;
     const conversation = conversationVersion;
     const list = $("chat-message-list");
-    const oldestMessage = list.querySelector(".chat-message");
-    if (!user || !oldestMessage) return;
+    if (!user || !historyCursorId) return;
 
     loadingOlderMessages = true;
     try {
         const response = await getMessages(user.id, {
             limit: MESSAGE_PAGE_SIZE,
-            beforeId: oldestMessage.dataset.messageId
+            beforeId: historyCursorId
         });
         if (!conversationIsCurrent(session, conversation)) return;
         if (!response.ok) {
@@ -404,20 +409,14 @@ async function loadOlderMessages() {
 
         const messages = (await response.json()) || [];
         if (!conversationIsCurrent(session, conversation)) return;
-        if (messages.length === 0) {
-            hasOlderMessages = false;
-            updateOlderHint();
-            return;
-        }
-
         // Include the hint's size change in the height delta so the same message stays in view.
         const previousHeight = list.scrollHeight;
-        const olderMessages = messages.filter(message => !renderedMessageIds.has(String(message.id)));
-        oldestMessage.before(...olderMessages.map(createChatMessage));
-        for (const message of olderMessages) renderedMessageIds.add(String(message.id));
+        const previousScrollTop = list.scrollTop;
+        mergeConversationMessages(messages);
+        historyCursorId = messages[0]?.id ?? null;
         hasOlderMessages = messages.length === MESSAGE_PAGE_SIZE;
-        updateOlderHint();
-        list.scrollTop += list.scrollHeight - previousHeight;
+        renderConversationMessages();
+        list.scrollTop = previousScrollTop + list.scrollHeight - previousHeight;
     } catch (error) {
         if (!conversationIsCurrent(session, conversation)) return;
         console.error("Older message loading error:", error);
