@@ -11,8 +11,13 @@ let initialized = false;
 let active = false;
 let sessionVersion = 0;
 let conversationVersion = 0;
+let userRefreshVersion = 0;
 let chatUsers = [];
 let selectedChatUser = null;
+let loadingInitialMessages = false;
+const bufferedMessages = new Map();
+const renderedMessageIds = new Set();
+let pendingSend = null;
 let chatSocket = null;
 let typingStatusTimeout = null;
 let userRefreshTimer = null;
@@ -61,7 +66,16 @@ export function stopChat() {
     chatUsers = [];
     state.unreadUserIds.clear();
     lastTypingSentAt = 0;
+    pendingSend = null;
     closeConversation();
+    $("message-content").value = "";
+    $("message-content").style.height = "";
+    $("chat-message-list").replaceChildren();
+    $("chat-message-list").scrollTop = 0;
+    $("message-status").textContent = "";
+    // Incoming-message feedback can name the previous account's contacts, so clear it on logout.
+    $("toast").hidden = true;
+    $("toast").textContent = "";
     $("chat-drawer").hidden = true;
     $("chat-fab").hidden = true;
 }
@@ -84,19 +98,20 @@ function stopUserRefresh() {
 async function loadChatUsers() {
     const session = sessionVersion;
     if (!active) return;
+    const refresh = ++userRefreshVersion;
     try {
         const response = await getChatUsers();
-        if (!active || session !== sessionVersion) return;
+        if (!active || session !== sessionVersion || refresh !== userRefreshVersion) return;
         if (!response.ok) {
             renderUserLists("Failed to load users.");
             return;
         }
         const users = (await response.json()) || [];
-        // A logout can finish while the body is being read, so recheck before painting it.
-        if (!active || session !== sessionVersion) return;
+        // Logout or a newer refresh can finish during body parsing, so check ownership again.
+        if (!active || session !== sessionVersion || refresh !== userRefreshVersion) return;
         chatUsers = users;
     } catch (error) {
-        if (!active || session !== sessionVersion) return;
+        if (!active || session !== sessionVersion || refresh !== userRefreshVersion) return;
         console.error("Chat user loading error:", error);
         renderUserLists("Failed to load users.");
         return;
@@ -197,6 +212,9 @@ function showUserListInDrawer() {
 function closeConversation() {
     selectedChatUser = null;
     conversationVersion += 1;
+    loadingInitialMessages = false;
+    bufferedMessages.clear();
+    renderedMessageIds.clear();
     hasOlderMessages = false;
     loadingOlderMessages = false;
     lastOlderMessagesLoadAt = 0;
@@ -225,6 +243,9 @@ async function openConversation(user) {
     const session = sessionVersion;
     const conversation = ++conversationVersion;
     state.unreadUserIds.delete(user.id);
+    loadingInitialMessages = true;
+    bufferedMessages.clear();
+    renderedMessageIds.clear();
     hasOlderMessages = false;
     loadingOlderMessages = false;
     lastOlderMessagesLoadAt = 0;
@@ -247,26 +268,43 @@ async function openConversation(user) {
         const response = await getMessages(user.id, { limit: MESSAGE_PAGE_SIZE });
         if (!conversationIsCurrent(session, conversation)) return;
         if (!response.ok) {
-            list.replaceChildren(el("p", { text: "Failed to load messages." }));
+            finishInitialHistory([], user, "Failed to load messages.");
             return;
         }
 
         const messages = (await response.json()) || [];
         if (!conversationIsCurrent(session, conversation)) return;
-        if (messages.length === 0) {
-            list.replaceChildren(el("p", { className: "chat-empty", text: `No messages yet. Say hi to ${user.nickname}!` }));
-        } else {
-            list.replaceChildren(...messages.map(createChatMessage));
-            hasOlderMessages = messages.length === MESSAGE_PAGE_SIZE;
-            updateOlderHint();
-            list.scrollTop = list.scrollHeight;
-        }
+        finishInitialHistory(messages, user);
         $("message-content").focus();
     } catch (error) {
         if (!conversationIsCurrent(session, conversation)) return;
         console.error("Conversation loading error:", error);
-        list.replaceChildren(el("p", { text: "Failed to load messages." }));
+        finishInitialHistory([], user, "Failed to load messages.");
     }
+}
+
+// finishInitialHistory merges live events with the initial snapshot so neither can erase the other.
+function finishInitialHistory(history, user, errorText = "") {
+    const messagesById = new Map(history.map(message => [String(message.id), message]));
+    for (const [id, message] of bufferedMessages) messagesById.set(id, message);
+    // Preserve the history's order and append unseen live events in their original arrival order.
+    const messages = [...messagesById.values()];
+    loadingInitialMessages = false;
+    bufferedMessages.clear();
+    hasOlderMessages = !errorText && history.length === MESSAGE_PAGE_SIZE;
+
+    const list = $("chat-message-list");
+    if (messages.length === 0) {
+        list.replaceChildren(errorText
+            ? el("p", { text: errorText })
+            : el("p", { className: "chat-empty", text: `No messages yet. Say hi to ${user.nickname}!` }));
+        return;
+    }
+    list.replaceChildren(...messages.map(createChatMessage));
+    for (const message of messages) renderedMessageIds.add(String(message.id));
+    if (errorText) $("message-status").textContent = errorText;
+    updateOlderHint();
+    list.scrollTop = list.scrollHeight;
 }
 
 // createChatMessage preserves full local timestamps and safe text for sender names and content.
@@ -287,6 +325,13 @@ function createChatMessage(message) {
 
 // appendChatMessage follows incoming messages only near the bottom and always follows sent messages.
 function appendChatMessage(message) {
+    const id = String(message.id);
+    if (loadingInitialMessages) {
+        bufferedMessages.set(id, message);
+        return;
+    }
+    if (renderedMessageIds.has(id)) return;
+    renderedMessageIds.add(id);
     const list = $("chat-message-list");
     list.querySelector(".chat-empty")?.remove();
     const wasAtBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
@@ -363,7 +408,9 @@ async function loadOlderMessages() {
 
         // Include the hint's size change in the height delta so the same message stays in view.
         const previousHeight = list.scrollHeight;
-        oldestMessage.before(...messages.map(createChatMessage));
+        const olderMessages = messages.filter(message => !renderedMessageIds.has(String(message.id)));
+        oldestMessage.before(...olderMessages.map(createChatMessage));
+        for (const message of olderMessages) renderedMessageIds.add(String(message.id));
         hasOlderMessages = messages.length === MESSAGE_PAGE_SIZE;
         updateOlderHint();
         list.scrollTop += list.scrollHeight - previousHeight;
@@ -380,19 +427,23 @@ async function loadOlderMessages() {
 // sendMessage posts the original textarea text and refreshes the server's latest-message ordering.
 async function sendMessage(event) {
     event.preventDefault();
-    if (!active) return;
+    if (!active || pendingSend) return;
     const session = sessionVersion;
     const conversation = conversationVersion;
     const status = $("message-status");
     const textarea = $("message-content");
-    if (!selectedChatUser) {
+    const recipient = selectedChatUser;
+    if (!recipient) {
         status.textContent = "Choose a user first.";
         return;
     }
-    if (!textarea.value.trim()) return;
+    const content = textarea.value;
+    if (!content.trim()) return;
+    const request = { session, conversation, receiverId: recipient.id, content };
+    pendingSend = request;
 
     try {
-        const response = await postMessage({ receiver_id: selectedChatUser.id, content: textarea.value });
+        const response = await postMessage({ receiver_id: request.receiverId, content: request.content });
         if (!active || session !== sessionVersion) return;
         if (!response.ok) {
             const errorText = await readError(response);
@@ -403,16 +454,24 @@ async function sendMessage(event) {
         const message = await response.json();
         if (!active || session !== sessionVersion) return;
         if (conversationIsCurrent(session, conversation)) {
-            textarea.value = "";
-            autoGrow(textarea);
+            if (textarea.value === request.content) {
+                textarea.value = "";
+                autoGrow(textarea);
+            }
             status.textContent = "";
+        }
+        if (selectedChatUser?.id === request.receiverId) {
             appendChatMessage(message);
         }
-        await loadChatUsers();
+        // Presence refresh has its own error handling and should not keep the send lock held.
+        loadChatUsers();
     } catch (error) {
         if (!conversationIsCurrent(session, conversation)) return;
         console.error("Message sending error:", error);
         status.textContent = "Something went wrong.";
+    } finally {
+        // Logout may have started a new account's send, so release only this request's lock.
+        if (pendingSend === request) pendingSend = null;
     }
 }
 
