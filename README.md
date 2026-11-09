@@ -14,7 +14,7 @@ A small forum built with Go, SQLite, and a browser-based single-page interface. 
 ## Requirements
 
 - Go 1.26 or newer (see `go.mod`)
-- A C compiler for the SQLite driver (`github.com/mattn/go-sqlite3` uses CGO)
+- No C compiler needed: the SQLite driver (`modernc.org/sqlite`) is pure Go
 
 ## Run locally
 
