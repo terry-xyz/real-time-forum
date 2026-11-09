@@ -319,6 +319,34 @@ function renderConversationMessages() {
     updateOlderHint();
 }
 
+// captureMessageAnchor records the first visible message's position within the scrolling viewport.
+function captureMessageAnchor(list) {
+    const viewportTop = list.getBoundingClientRect().top + list.clientTop;
+    const viewportBottom = viewportTop + list.clientHeight;
+    for (const message of list.querySelectorAll(".chat-message")) {
+        const bounds = message.getBoundingClientRect();
+        if (bounds.bottom > viewportTop && bounds.top < viewportBottom) {
+            return { messageId: message.dataset.messageId, offset: bounds.top - viewportTop };
+        }
+    }
+    return null;
+}
+
+// restoreMessageAnchor corrects the same message's displacement, even when new messages sort after it.
+function restoreMessageAnchor(list, anchor, fallbackScrollTop) {
+    if (anchor) {
+        const message = [...list.querySelectorAll(".chat-message")]
+            .find(candidate => candidate.dataset.messageId === anchor.messageId);
+        if (message) {
+            const viewportTop = list.getBoundingClientRect().top + list.clientTop;
+            list.scrollTop += message.getBoundingClientRect().top - viewportTop - anchor.offset;
+            return;
+        }
+    }
+    // The viewport can contain only the older-history hint, so retain the caller's safe scroll fallback.
+    list.scrollTop = fallbackScrollTop;
+}
+
 // createChatMessage preserves full local timestamps and safe text for sender names and content.
 function createChatMessage(message) {
     const mine = message.sender_id === state.currentUser?.id;
@@ -344,9 +372,10 @@ function appendChatMessage(message) {
     const list = $("chat-message-list");
     const previousScrollTop = list.scrollTop;
     const wasAtBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
+    const anchor = wasAtBottom ? null : captureMessageAnchor(list);
     renderConversationMessages();
     if (wasAtBottom || message.sender_id === state.currentUser?.id) list.scrollTop = list.scrollHeight;
-    else list.scrollTop = previousScrollTop;
+    else restoreMessageAnchor(list, anchor, previousScrollTop);
 }
 
 // updateOlderHint ensures short histories overflow so scrolling to the top can request another page.
@@ -409,14 +438,15 @@ async function loadOlderMessages() {
 
         const messages = (await response.json()) || [];
         if (!conversationIsCurrent(session, conversation)) return;
-        // Include the hint's size change in the height delta so the same message stays in view.
+        // Sorted inserts can land on either side of the reader, so anchor to the visible message itself.
+        const anchor = captureMessageAnchor(list);
         const previousHeight = list.scrollHeight;
         const previousScrollTop = list.scrollTop;
         mergeConversationMessages(messages);
         historyCursorId = messages[0]?.id ?? null;
         hasOlderMessages = messages.length === MESSAGE_PAGE_SIZE;
         renderConversationMessages();
-        list.scrollTop = previousScrollTop + list.scrollHeight - previousHeight;
+        restoreMessageAnchor(list, anchor, previousScrollTop + list.scrollHeight - previousHeight);
     } catch (error) {
         if (!conversationIsCurrent(session, conversation)) return;
         console.error("Older message loading error:", error);
