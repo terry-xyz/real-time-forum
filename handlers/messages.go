@@ -27,6 +27,7 @@ func MessagesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// getMessages requests a conversation page, optionally before a message ID.
 func getMessages(w http.ResponseWriter, r *http.Request) {
 
 	user, err := getUserFromSession(r)
@@ -120,6 +121,7 @@ func getMessages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(messages)
 }
 
+// createMessage saves an authenticated user’s message and delivers it to connected recipients.
 func createMessage(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserFromSession(r)
 	if err != nil {

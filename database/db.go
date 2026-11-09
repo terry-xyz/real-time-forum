@@ -9,6 +9,7 @@ import (
 
 var DB *sql.DB
 
+// InitDB opens the SQLite database, checks connectivity, and creates the application tables.
 func InitDB(dbPath string) {
 	var err error
 	DB, err = sql.Open("sqlite3", dbPath+"?_foreign_keys=on&_journal_mode=WAL")
@@ -23,6 +24,7 @@ func InitDB(dbPath string) {
 	createTables()
 }
 
+// createTables creates the forum schema and message lookup indexes if they do not exist.
 func createTables() {
 	schema := `
 		CREATE TABLE IF NOT EXISTS users (

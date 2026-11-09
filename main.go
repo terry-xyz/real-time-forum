@@ -8,6 +8,7 @@ import (
 	"real-time-forum/handlers"
 )
 
+// main initializes SQLite, registers the API and static frontend routes, and starts the HTTP server.
 func main() {
 	// Initialize database
 	database.InitDB("./forum.db")

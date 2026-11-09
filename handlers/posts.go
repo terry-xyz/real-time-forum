@@ -13,7 +13,7 @@ import (
 	"github.com/gofrs/uuid"
 )
 
-// Helper: Authenticate request from cookie session
+// getUserFromSession resolves the authenticated user from the session cookie and database.
 func getUserFromSession(r *http.Request) (*models.User, error) {
 	cookie, err := r.Cookie("session_token")
 	if err != nil {
@@ -57,7 +57,7 @@ func CategoriesHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(categories)
 }
 
-// PostHandler handles listing posts (GET) and creating posts (POST)
+// PostsHandler dispatches post requests to the feed reader or creator.
 func PostsHandler(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -69,6 +69,7 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// createPost validates and stores a post with its selected categories in one transaction.
 func createPost(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserFromSession(r)
 	if err != nil {
@@ -145,6 +146,7 @@ func createPost(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getPosts returns the newest posts, optionally filtered by category, with their category names.
 func getPosts(w http.ResponseWriter, r *http.Request) {
 	categoryFilter := r.URL.Query().Get("category")
 
@@ -218,6 +220,7 @@ func CommentsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// createComment validates and stores a comment for the authenticated user.
 func createComment(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserFromSession(r)
 	if err != nil {
@@ -252,6 +255,7 @@ func createComment(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// getComments returns a post’s comments in chronological order.
 func getComments(w http.ResponseWriter, r *http.Request) {
 	postID := r.URL.Query().Get("post_id")
 	if postID == "" {
