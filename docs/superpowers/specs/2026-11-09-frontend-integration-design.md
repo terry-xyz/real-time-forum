@@ -36,13 +36,13 @@ Modules expose small initialization or action functions. `main.js` wires them to
 
 ## Behavior preservation
 
-Treat the current `ui/` frontend as the visual and interaction baseline. Preserve all user-visible behavior currently provided by either JavaScript file, including behavior that exists only in the older `static/main.js`. Reconcile duplicate auth, posts, comments, and chat logic as one implementation per feature, preserving its user-visible outcomes and compatibility with the existing backend.
+Treat the current `ui/` frontend as the visual and interaction baseline. Preserve its user-visible behavior exactly. Reconcile duplicate auth, posts, comments, and chat logic as one implementation per feature; when `static/main.js` and `ui/main.js` differ, keep the `ui/main.js` behavior. Reuse the old implementation's backend interactions and error handling where they fit that behavior, without restoring its old dynamically generated page flow.
 
 Keep element IDs, classes, and data attributes aligned with the feature modules that use them. Preserve the theme pre-paint behavior in the page head. Keep API paths and WebSocket URL behavior unchanged.
 
 ## Migration sequence
 
-1. Inventory the behavior and event wiring in both current `main.js` files, recording overlaps and behaviors unique to either implementation.
+1. Inventory the behavior and event wiring in both current `main.js` files, recording overlaps and behaviors unique to either implementation. Resolve conflicting UI behavior in favor of `ui/main.js`.
 2. Update `static/index.html` markup to support the new UI while retaining the existing file path and theme pre-paint behavior.
 3. Combine the existing and UI stylesheet rules in `static/style.css`; resolve conflicting selectors against the new UI appearance.
 4. Extract shared API, state, and DOM helpers, then move each feature into its focused module.
@@ -53,7 +53,8 @@ Keep element IDs, classes, and data attributes aligned with the feature modules 
 
 - The production site is served from `static/` at the existing URL and uses the existing backend.
 - The integrated page retains the new UI's appearance and interactions.
-- Features from both current frontends remain available, including auth, posts, categories, comments, profile, theme, chat, typing, online presence, and older-message loading.
+- The integrated frontend retains the `ui/` behavior and appearance for auth, posts, categories, comments, profile, theme, chat, typing, online presence, and older-message loading.
+- Existing backend operations and compatible error handling from the old static frontend remain represented in the feature modules.
 - JavaScript responsibilities are separated into the modules described above, with a small startup entry point.
 - No backend, API, schema, or dependency changes are needed.
 

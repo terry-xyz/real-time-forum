@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Integrate the new UI into the existing `static/` frontend and split both frontends' JavaScript into readable browser modules without changing appearance or behavior.
+**Goal:** Integrate the new UI into the existing `static/` frontend and split both frontends' JavaScript into readable browser modules while preserving the current `ui/` appearance and behavior.
 
 **Architecture:** Keep `static/index.html` and `static/style.css` as the served files, update the page markup for the new UI, and combine the styles. Use native ES modules under `static/js/`, with a small startup module, shared API/DOM/app-state modules, and feature modules for auth, posts, comments, profile, chat, and theme. Leave Go and the backend API unchanged.
 
@@ -28,13 +28,13 @@
 | `static/js/chat.js` | Chat users, conversations, messages, WebSocket, typing, presence, pagination. |
 | `static/js/theme.js` | Saved/system theme selection and toggles. |
 
-Modules use named exports. Feature modules depend on shared modules; `main.js` coordinates startup. Keep socket, timers, selection, throttles, and pagination state private to `chat.js`. Avoid cyclic imports.
+Modules use named exports. Feature modules depend on shared modules; `main.js` coordinates startup. Keep socket, timers, selection, throttles, and pagination state private to `chat.js`. Avoid cyclic imports. Where the old static frontend and the current UI differ, the UI behavior is authoritative; bring over old implementation details only when they preserve that behavior and backend compatibility.
 
 ## Task 1: Inventory current behavior
 
 **Files:** Read `static/main.js`, `ui/main.js`, `static/index.html`, and `ui/index.html`.
 
-- [ ] Record common and unique flows from both scripts: auth, posts, category filtering, comments, chat, typing, presence, pagination, error/empty feedback, and navigation. Map each function to a module in the file map.
+- [ ] Record common and unique flows from both scripts: auth, posts, category filtering, comments, chat, typing, presence, pagination, error/empty feedback, and navigation. Map each function to a module in the file map, marking the current UI behavior as authoritative in conflicts.
 - [ ] Record every ID, class, and `data-*` attribute queried by the UI script; use it as the markup contract for Task 2.
 
 ## Task 2: Update the page markup
@@ -64,7 +64,7 @@ Modules use named exports. Feature modules depend on shared modules; `main.js` c
 
 **Files:** Create `static/js/auth.js` and `static/js/theme.js`; use `state.js`.
 
-- [ ] Port login, registration, logout, session restoration, account menu, and signed-in/out transitions from `ui/main.js`. Preserve the old static flow's success/failure feedback using the new page's fixed forms. Export explicit initialization and session restore functions.
+- [ ] Port login, registration, logout, session restoration, account menu, and signed-in/out transitions from `ui/main.js`. Preserve the current UI's success/failure feedback and fixed form flow. Reuse compatible backend response handling from the old script. Export explicit initialization and session restore functions.
 - [ ] Port theme storage, system preference handling, application, and toggles. Keep the inline pre-paint script and CSS theme attributes consistent with the stored `"theme"` value.
 - [ ] Manually inspect signed-out view, login, registration feedback, logout, reload/session restore, theme toggle, and theme persistence using `go run .` at `http://localhost:8080`.
 
@@ -72,7 +72,7 @@ Modules use named exports. Feature modules depend on shared modules; `main.js` c
 
 **Files:** Create `static/js/posts.js`, `static/js/comments.js`, and `static/js/profile.js`; use `state.js`.
 
-- [ ] Port category loading, post loading/creation, feed/category rendering, search, composer state, and post interactions into `posts.js`. Preserve the older static category-filter behavior and error feedback where it differs.
+- [ ] Port category loading, post loading/creation, feed/category rendering, search, composer state, and post interactions into `posts.js`. Preserve the UI's client-side category tabs and filtering behavior. Reuse compatible API/error handling from the old script without changing the UI interaction.
 - [ ] Port comment load/render/submit behavior from both scripts into `comments.js`, preserving endpoint shapes and user-visible feedback.
 - [ ] Port profile rendering and navigation into `profile.js`. Avoid cyclic imports; use a callback supplied by `main.js` if posts and profile need to call each other's rendering behavior.
 - [ ] Manually inspect post creation, category filtering, search, comments, profile, empty states, and request failure feedback against the UI preview.
@@ -104,6 +104,6 @@ Modules use named exports. Feature modules depend on shared modules; `main.js` c
 
 ## Plan self-review
 
-- **Spec coverage:** Tasks 2–3 cover page and CSS integration; Tasks 4–8 cover the ES module structure and all features; Tasks 1, 5–9 cover behavior preservation and manual parity review.
+- **Spec coverage:** Tasks 2–3 cover page and CSS integration; Tasks 4–8 cover the ES module structure and all features; Tasks 1, 5–9 cover UI-authoritative behavior preservation and manual parity review.
 - **Placeholders:** No TODO/TBD or unspecified test-writing instructions.
 - **Interfaces:** App-wide state is limited; chat lifecycle state stays private; startup coordinates features and avoids cyclic imports.
