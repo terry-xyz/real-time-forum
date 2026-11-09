@@ -24,7 +24,7 @@ Use native browser ES modules; do not add a bundler or package dependencies for 
 - `static/js/main.js`: application startup and coordination of feature initialization.
 - `static/js/api.js`: shared HTTP requests and response error handling for existing API routes.
 - `static/js/state.js`: only app-wide state shared across features, such as the current user and current view. Chat-specific timers, socket state, selection, and pagination remain private to `chat.js`.
-- `static/js/dom.js`: shared DOM construction and formatting helpers used by multiple features.
+- `static/js/dom.js`: shared DOM construction, formatting, and toast helpers used by multiple features.
 - `static/js/auth.js`: login, registration, logout, session restore, and signed-in/signed-out transitions.
 - `static/js/posts.js`: post loading/creation, category filtering, search, and feed rendering.
 - `static/js/comments.js`: comment loading, rendering, and submission.

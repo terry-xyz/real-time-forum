@@ -20,7 +20,7 @@
 | `static/js/main.js` | Startup, session restoration, and coordination of feature modules. |
 | `static/js/api.js` | Shared HTTP helpers and existing endpoint requests/error handling. |
 | `static/js/state.js` | App-wide user, view, feed, and filter state. |
-| `static/js/dom.js` | Safe element construction, icons, avatars, date formatting, textarea sizing. |
+| `static/js/dom.js` | Safe element construction, icons, avatars, date formatting, textarea sizing, shared toast feedback. |
 | `static/js/auth.js` | Login, registration, logout, session restore, auth view switching. |
 | `static/js/posts.js` | Posts, categories, search, feed rendering, composer. |
 | `static/js/comments.js` | Comment loading, rendering, and submission. |
@@ -58,11 +58,11 @@ Modules use named exports. Feature modules depend on shared modules; `main.js` c
 
 - [ ] Put only cross-feature state in `state.js`: current user/view, posts, categories, active category, search query, and any shared unread state. Keep chat-only state in `chat.js`.
 - [ ] Centralize repeated fetch setup and response error text handling in `api.js`. Preserve paths and request shapes for register, login, logout, check-auth, categories, posts, comments, chat users, messages, and `/api/ws`.
-- [ ] Move safe element creation, icon/avatar helpers, relative time, time elements, and textarea auto-grow into `dom.js`. Keep API/user text rendered via `textContent`.
+- [ ] Move safe element creation, icon/avatar helpers, relative time, time elements, textarea auto-grow, and the shared toast helper into `dom.js`. Keep API/user text rendered via `textContent`; keep the toast timeout private to the helper.
 
 ## Task 5: Extract auth and theme
 
-**Files:** Create `static/js/auth.js` and `static/js/theme.js`; use `state.js`.
+**Files:** Create `static/js/auth.js` and `static/js/theme.js`; modify `static/js/dom.js`; use `state.js`.
 
 - [ ] Port login, registration, logout, session restoration, account menu, and signed-in/out transitions from `ui/main.js`. Preserve the current UI's success/failure feedback and fixed form flow. Reuse compatible backend response handling from the old script. Export explicit initialization and session restore functions.
 - [ ] Port theme storage, system preference handling, application, and toggles. Keep the inline pre-paint script and CSS theme attributes consistent with the stored `"theme"` value.
