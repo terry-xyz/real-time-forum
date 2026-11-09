@@ -30,7 +30,12 @@ async function enterApp() {
 function leaveApp() {
     state.currentUser = null;
     state.unreadUserIds.clear();
-    onLoggedOut();
+    try {
+        onLoggedOut();
+    } catch (error) {
+        // A disposed feature must not keep a confirmed logout on the signed-in screen.
+        console.error("Logout cleanup error:", error);
+    }
     showAuth("login");
 }
 
@@ -145,9 +150,9 @@ export function closeAccountMenu() {
 
 // initAuth binds persistent forms once and accepts main's authenticated and logged-out lifecycle callbacks.
 export function initAuth(callbacks = {}) {
+    if (initialized) return;
     onAuthenticated = callbacks.onAuthenticated || (async () => {});
     onLoggedOut = callbacks.onLoggedOut || (() => {});
-    if (initialized) return;
     initialized = true;
 
     $("login-form").addEventListener("submit", login);
