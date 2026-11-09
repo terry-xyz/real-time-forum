@@ -287,8 +287,12 @@ async function openConversation(user) {
 function finishInitialHistory(history, user, errorText = "") {
     const messagesById = new Map(history.map(message => [String(message.id), message]));
     for (const [id, message] of bufferedMessages) messagesById.set(id, message);
-    // Preserve the history's order and append unseen live events in their original arrival order.
-    const messages = [...messagesById.values()];
+    // Buffered events can precede the snapshot, so match the backend's timestamp and string-ID order.
+    const messages = [...messagesById.values()].sort((left, right) => {
+        const timeDifference = Date.parse(left.created_at) - Date.parse(right.created_at);
+        if (timeDifference !== 0) return timeDifference;
+        return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+    });
     loadingInitialMessages = false;
     bufferedMessages.clear();
     hasOlderMessages = !errorText && history.length === MESSAGE_PAGE_SIZE;
