@@ -1,8 +1,10 @@
 # Real-Time Forum
 
-[![CI](https://github.com/terry-xyz/real-time-forum/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/terry-xyz/real-time-forum/actions/workflows/ci.yml)
-[![Go version](https://img.shields.io/github/go-mod/go-version/terry-xyz/real-time-forum)](go.mod)
-[![License](https://img.shields.io/github/license/terry-xyz/real-time-forum)](LICENSE)
+![JavaScript](https://img.shields.io/badge/JavaScript-323330?style=for-the-badge&logo=javascript&logoColor=F7DF1E)
+![Go](https://img.shields.io/badge/Go-00ADD8?style=for-the-badge&logo=go&logoColor=white)
+[![MIT](https://img.shields.io/badge/MIT-green?style=for-the-badge)](LICENSE)
+[![Portfolio](https://img.shields.io/badge/Portfolio-255E63?style=for-the-badge&logo=About.me&logoColor=white)](https://terryz.xyz)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/lefteris-papanthymou/)
 
 A small forum built with Go, SQLite, and a browser-based single-page interface. Members can publish categorized posts, discuss them in comments, view their profile and chat with other members through real-time direct messages.
 
