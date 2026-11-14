@@ -11,9 +11,18 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	socketPingInterval = 25 * time.Second
+	socketReadTimeout  = 60 * time.Second
+	socketWriteTimeout = 5 * time.Second
+	maxUserSockets     = 8
+)
+
 type chatConnection struct {
-	conn    *websocket.Conn
-	writeMu sync.Mutex
+	conn     *websocket.Conn
+	session  *authenticatedUser
+	outgoing chan websocketEvent
+	done     chan struct{}
 }
 
 type chatConnectionHub struct {
@@ -31,122 +40,161 @@ var chatHub = chatConnectionHub{
 	connections: make(map[string]map[*chatConnection]struct{}),
 }
 
-type incomingEvent struct {
-	Type       string `json:"type"`
-	ReceiverID string `json:"receiver_id"`
-}
-
 var websocketUpgrader = websocket.Upgrader{
+	HandshakeTimeout: socketWriteTimeout,
 	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		return origin == "" || origin == "http://"+r.Host || origin == "https://"+r.Host
+		scheme := "http://"
+		if r.TLS != nil {
+			scheme = "https://"
+		}
+		return r.Header.Get("Origin") == scheme+r.Host
 	},
 }
 
-// WebSocketHandler opens an authenticated connection for future chat updates.
 func WebSocketHandler(w http.ResponseWriter, r *http.Request) {
 	user, err := getUserFromSession(r)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-
-	conn, err := websocketUpgrader.Upgrade(w, r, nil)
+	conn, err := websocketUpgrader.Upgrade(w, r, w.Header())
 	if err != nil {
 		return
 	}
-	client := &chatConnection{conn: conn}
-	chatHub.register(user.ID, client)
-	defer chatHub.unregister(user.ID, client)
+	defer conn.Close()
 
+	client := &chatConnection{
+		conn: conn, session: user, outgoing: make(chan websocketEvent, 16), done: make(chan struct{}),
+	}
+	if !chatHub.register(client) {
+		return
+	}
+	defer chatHub.unregister(client)
+
+	// Close a socket upgraded while logout or another login was revoking its session.
+	if _, err := getUserFromSession(r); err != nil {
+		return
+	}
+	expiry := time.AfterFunc(time.Until(user.expiresAt), func() { chatHub.unregister(client) })
+	defer expiry.Stop()
+
+	conn.SetReadLimit(1024)
+	conn.SetReadDeadline(time.Now().Add(socketReadTimeout))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(socketReadTimeout))
+	})
+	go client.writeEvents()
+
+	var lastTyping time.Time
 	for {
-		_, payload, err := conn.ReadMessage()
+		messageType, payload, err := conn.ReadMessage()
 		if err != nil {
 			return
 		}
-
-		var event incomingEvent
-		if err := json.Unmarshal(payload, &event); err != nil {
+		if messageType != websocket.TextMessage || time.Since(lastTyping) < time.Second {
 			continue
 		}
-
-		if event.Type != "typing" || event.ReceiverID == "" {
+		var event struct {
+			Type       string `json:"type"`
+			ReceiverID string `json:"receiver_id"`
+		}
+		if json.Unmarshal(payload, &event) != nil || event.Type != "typing" ||
+			event.ReceiverID == "" || event.ReceiverID == user.ID {
 			continue
 		}
-
-		chatHub.sendTyping(event.ReceiverID, user.ID)
+		select {
+		case <-client.done:
+			return
+		default:
+			lastTyping = time.Now()
+			chatHub.send(event.ReceiverID, websocketEvent{Type: "typing", SenderID: user.ID})
+		}
 	}
 }
 
-// register adds a chat connection to the set of live connections for its user.
-func (hub *chatConnectionHub) register(userID string, client *chatConnection) {
+func (client *chatConnection) writeEvents() {
+	defer chatHub.unregister(client)
+	pings := time.NewTicker(socketPingInterval)
+	defer pings.Stop()
+	for {
+		select {
+		case <-client.done:
+			return
+		case event := <-client.outgoing:
+			if !time.Now().Before(client.session.expiresAt) {
+				return
+			}
+			client.conn.SetWriteDeadline(time.Now().Add(socketWriteTimeout))
+			if err := client.conn.WriteJSON(event); err != nil {
+				return
+			}
+		case <-pings.C:
+			if err := client.conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(socketWriteTimeout)); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (hub *chatConnectionHub) register(client *chatConnection) bool {
 	hub.mu.Lock()
 	defer hub.mu.Unlock()
+	userID := client.session.ID
+	if len(hub.connections[userID]) >= maxUserSockets {
+		return false
+	}
 	if hub.connections[userID] == nil {
 		hub.connections[userID] = make(map[*chatConnection]struct{})
 	}
 	hub.connections[userID][client] = struct{}{}
+	return true
 }
 
-// unregister removes a chat connection and closes its underlying socket.
-func (hub *chatConnectionHub) unregister(userID string, client *chatConnection) {
+func (hub *chatConnectionHub) unregister(client *chatConnection) {
 	hub.mu.Lock()
-	if clients := hub.connections[userID]; clients != nil {
-		delete(clients, client)
-		if len(clients) == 0 {
-			delete(hub.connections, userID)
+	defer hub.mu.Unlock()
+	hub.remove(client)
+}
+
+// remove requires the hub lock.
+func (hub *chatConnectionHub) remove(client *chatConnection) {
+	userID := client.session.ID
+	clients := hub.connections[userID]
+	if _, registered := clients[client]; !registered {
+		return
+	}
+	delete(clients, client)
+	if len(clients) == 0 {
+		delete(hub.connections, userID)
+	}
+	close(client.done)
+	client.conn.Close()
+}
+
+func (hub *chatConnectionHub) revoke(userID, sessionID string) {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
+	for client := range hub.connections[userID] {
+		if client.session.sessionID == sessionID {
+			hub.remove(client)
 		}
 	}
-	hub.mu.Unlock()
-
-	client.writeMu.Lock()
-	client.conn.Close()
-	client.writeMu.Unlock()
 }
 
-// isOnline reports whether the user currently has a registered chat connection.
 func (hub *chatConnectionHub) isOnline(userID string) bool {
 	hub.mu.RLock()
 	defer hub.mu.RUnlock()
 	return len(hub.connections[userID]) > 0
 }
 
-// sendMessage delivers a saved message to every live connection belonging to the recipient.
-func (hub *chatConnectionHub) sendMessage(userID string, message models.Message) {
-	hub.mu.RLock()
-	clients := make([]*chatConnection, 0, len(hub.connections[userID]))
+func (hub *chatConnectionHub) send(userID string, event websocketEvent) {
+	hub.mu.Lock()
+	defer hub.mu.Unlock()
 	for client := range hub.connections[userID] {
-		clients = append(clients, client)
-	}
-	hub.mu.RUnlock()
-
-	for _, client := range clients {
-		client.writeMu.Lock()
-		client.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		err := client.conn.WriteJSON(websocketEvent{Type: "message", Message: &message})
-		client.writeMu.Unlock()
-		if err != nil {
-			hub.unregister(userID, client)
-		}
-	}
-}
-
-// sendTyping relays a typing event to every live connection belonging to the recipient.
-func (hub *chatConnectionHub) sendTyping(userID, senderID string) {
-	hub.mu.RLock()
-	clients := make([]*chatConnection, 0, len(hub.connections[userID]))
-	for client := range hub.connections[userID] {
-		clients = append(clients, client)
-	}
-	hub.mu.RUnlock()
-
-	for _, client := range clients {
-		client.writeMu.Lock()
-		client.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		err := client.conn.WriteJSON(websocketEvent{Type: "typing", SenderID: senderID})
-		client.writeMu.Unlock()
-		if err != nil {
-			hub.unregister(userID, client)
+		select {
+		case client.outgoing <- event:
+		default:
+			hub.remove(client)
 		}
 	}
 }

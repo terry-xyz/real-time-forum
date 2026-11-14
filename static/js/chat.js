@@ -84,7 +84,10 @@ export function stopChat() {
 function startUserRefresh() {
     stopUserRefresh();
     userRefreshTimer = setInterval(() => {
-        if (document.visibilityState === "visible") loadChatUsers();
+        if (document.visibilityState === "visible") {
+            connectChatSocket();
+            loadChatUsers();
+        }
     }, USER_REFRESH_MS);
 }
 

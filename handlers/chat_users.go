@@ -11,10 +11,6 @@ import (
 
 // ChatUsersHandler lists the other users, with recent conversations first.
 func ChatUsersHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
 
 	user, err := getUserFromSession(r)
 	if err != nil {
@@ -22,8 +18,8 @@ func ChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := database.DB.Query(`
-		SELECT u.id, u.nickname, MAX(m.created_at) AS last_message_at
+	rows, err := database.DB.QueryContext(r.Context(), `
+		SELECT u.id, u.nickname, strftime('%Y-%m-%dT%H:%M:%fZ', MAX(m.created_at)) AS last_message_at
 		FROM users u
 		LEFT JOIN messages m ON
 			(m.sender_id = ? AND m.receiver_id = u.id) OR
@@ -32,7 +28,7 @@ func ChatUsersHandler(w http.ResponseWriter, r *http.Request) {
 		GROUP BY u.id, u.nickname
 		ORDER BY
 			CASE WHEN last_message_at IS NULL THEN 1 ELSE 0 END,
-			last_message_at DESC,
+			MAX(m.created_at) DESC,
 			LOWER(u.nickname) ASC,
 			u.id ASC
 	`, user.ID, user.ID, user.ID)

@@ -13,14 +13,21 @@ A small forum built with Go, SQLite, and a browser-based single-page interface. 
 
 ## Requirements
 
-- Go 1.26 or newer (see `go.mod`)
-- No C compiler needed: the SQLite driver (`modernc.org/sqlite`) is pure Go
+- Go 1.26.11 or newer (see `go.mod`)
+- GCC on your PATH and CGO enabled (`CGO_ENABLED=1`) to build the SQLite driver
 
 ## Run locally
 
 From the project root:
 
 ```sh
+make run
+```
+
+On Windows, `make run` tries the configured Go compiler settings first. If the build fails and w64devkit is installed at `C:\w64devkit`, Make retries with its GCC. If you run Go directly, you can select that compiler in PowerShell:
+
+```powershell
+$env:CC = 'C:\w64devkit\bin\gcc.exe'
 go run .
 ```
 
@@ -33,7 +40,7 @@ go build -o real-time-forum .
 ./real-time-forum
 ```
 
-Run the executable from the project root so it can find the `static/` frontend directory. The database path is currently set to `./forum.db` in `main.go`, and the listen address is `:8080`.
+Run the executable from the project root so it can find the `static/` frontend directory and `forum.db`. HTTP listens on localhost for development. To serve HTTPS, set `FORUM_TLS_CERT` and `FORUM_TLS_KEY` to the certificate and private key paths. Set `FORUM_ADDR` to an address such as `:443` to accept HTTPS connections beyond localhost. If you use a proxy, preserve the public host and HTTPS connection to the app. Request limits use the connecting IP, which is the proxy's IP in that setup.
 
 ## API overview
 
@@ -41,7 +48,7 @@ The frontend is served from `static/`. The Go server exposes these endpoints:
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `POST` | `/api/register` | Create an account |
+| `POST` | `/api/register` | Create an account (age 13–120, gender Male or Female) |
 | `POST` | `/api/login` | Sign in and create a session |
 | `POST` | `/api/logout` | End the current session |
 | `GET` | `/api/check-auth` | Check the current session |
@@ -52,7 +59,7 @@ The frontend is served from `static/`. The Go server exposes these endpoints:
 | `GET`, `POST` | `/api/messages` | Load conversation history or send a direct message |
 | WebSocket | `/api/ws` | Receive live messages and exchange typing events |
 
-Post creation, comments, chat, and session checks require the `session_token` cookie set at login. Posts can be filtered by category with `/api/posts?category=name`. Message history accepts a peer's ID in `with`; it returns up to 10 messages per page and supports `before_id` pagination.
+All forum reads and writes require the `session_token` cookie set at login. JSON requests must set `Content-Type: application/json`. New passwords must be 12–72 bytes. Posts can be filtered by category with `/api/posts?category=name`. Message history accepts a peer's ID in `with` and returns up to 10 messages per page. Pass `before_id` to load an older page.
 
 ## Project layout
 

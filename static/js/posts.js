@@ -64,7 +64,7 @@ function renderCategories() {
 
     const side = $("side-category-list");
     if (state.categories.length === 0) {
-        side.replaceChildren(el("p", { className: "muted", text: "No categories yet.", attrs: { style: "margin:0;padding:4px 16px 8px" } }));
+        side.replaceChildren(el("p", { className: "muted category-empty", text: "No categories yet." }));
         return;
     }
     side.replaceChildren(...state.categories.map(category => {

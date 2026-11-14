@@ -311,6 +311,7 @@ body {
 
 button,
 input,
+select,
 textarea {
     color: inherit;
     font: inherit;
@@ -442,6 +443,11 @@ svg {
 }
 
 /* ---------- Avatars (initial on a color picked from the name) ---------- */
+.category-empty {
+    margin: 0;
+    padding: 4px 16px 8px;
+}
+
 .avatar {
     align-items: center;
     background: var(--avatar-color, #8899a6);
@@ -548,6 +554,7 @@ svg {
 }
 
 .auth-form input,
+.auth-form select,
 .composer-categories {
     background: var(--input-bg);
     border: 1px solid var(--border-strong);
@@ -559,6 +566,7 @@ svg {
 }
 
 .auth-form input:focus,
+.auth-form select:focus,
 .composer-categories:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent);
@@ -570,8 +578,23 @@ svg {
     gap: 12px;
 }
 
-.field-row input {
+.field-row input,
+.field-row select {
     min-width: 0;
+}
+
+#gender:invalid {
+    color: var(--text-muted);
+}
+
+#age {
+    appearance: textfield;
+}
+
+#age::-webkit-inner-spin-button,
+#age::-webkit-outer-spin-button {
+    appearance: none;
+    margin: 0;
 }
 
 .auth-switch {

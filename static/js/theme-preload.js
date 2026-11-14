@@ -1,0 +1,7 @@
+(function () {
+    let saved;
+    try { saved = localStorage.getItem("theme"); } catch {}
+    const dark = saved ? saved === "dark" : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    document.querySelector('meta[name="theme-color"]').content = dark ? "#000000" : "#ffffff";
+})();

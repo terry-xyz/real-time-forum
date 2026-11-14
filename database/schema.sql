@@ -70,3 +70,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_receiver_created
     ON messages(sender_id, receiver_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver_sender_created
     ON messages(receiver_id, sender_id, created_at, id);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments(post_id, created_at);

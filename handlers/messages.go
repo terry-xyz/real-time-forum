@@ -23,6 +23,7 @@ func MessagesHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		createMessage(w, r)
 	default:
+		w.Header().Set("Allow", "GET, POST")
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
@@ -43,7 +44,7 @@ func getMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var existingPeerID string
-	err = database.DB.QueryRow(`SELECT id FROM users WHERE id = ?`, peerID).Scan(&existingPeerID)
+	err = database.DB.QueryRowContext(r.Context(), `SELECT id FROM users WHERE id = ?`, peerID).Scan(&existingPeerID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -68,7 +69,7 @@ func getMessages(w http.ResponseWriter, r *http.Request) {
 	beforeID := r.URL.Query().Get("before_id")
 	beforeTime := ""
 	if beforeID != "" {
-		err = database.DB.QueryRow(`
+		err = database.DB.QueryRowContext(r.Context(), `
 			SELECT CAST(created_at AS TEXT) FROM messages
 			WHERE id = ?
 			  AND ((sender_id = ? AND receiver_id = ?) OR (sender_id = ? AND receiver_id = ?))
@@ -83,7 +84,7 @@ func getMessages(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rows, err := database.DB.Query(`
+	rows, err := database.DB.QueryContext(r.Context(), `
 		SELECT m.id, m.sender_id, sender.nickname, m.receiver_id, m.content, m.created_at
 		FROM messages m
 		JOIN users sender ON sender.id = m.sender_id
@@ -130,14 +131,13 @@ func createMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.CreateMessageRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid JSON body", http.StatusBadRequest)
+	if !decodeJSON(w, r, &req) {
 		return
 	}
 	req.ReceiverID = strings.TrimSpace(req.ReceiverID)
 	req.Content = strings.TrimSpace(req.Content)
-	if req.ReceiverID == "" || req.Content == "" {
-		http.Error(w, "Receiver ID and message content are required", http.StatusBadRequest)
+	if req.ReceiverID == "" || req.Content == "" || len(req.Content) > 8<<10 {
+		http.Error(w, "Receiver ID and message content up to 8 KB are required", http.StatusBadRequest)
 		return
 	}
 	if req.ReceiverID == user.ID {
@@ -146,7 +146,7 @@ func createMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var existingPeerID string
-	err = database.DB.QueryRow(`SELECT id FROM users WHERE id = ?`, req.ReceiverID).Scan(&existingPeerID)
+	err = database.DB.QueryRowContext(r.Context(), `SELECT id FROM users WHERE id = ?`, req.ReceiverID).Scan(&existingPeerID)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Recipient not found", http.StatusNotFound)
 		return
@@ -161,30 +161,21 @@ func createMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Server error", http.StatusInternalServerError)
 		return
 	}
-	_, err = database.DB.Exec(`
-		INSERT INTO messages (id, sender_id, receiver_id, content)
-		VALUES (?, ?, ?, ?)
-	`, messageID.String(), user.ID, req.ReceiverID, req.Content)
+	message := models.Message{
+		ID: messageID.String(), SenderID: user.ID, SenderName: user.Nickname,
+		ReceiverID: req.ReceiverID, Content: req.Content,
+	}
+	err = database.DB.QueryRowContext(r.Context(), `
+		INSERT INTO messages (id, sender_id, receiver_id, content, created_at)
+		VALUES (?, ?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))
+		RETURNING created_at
+	`, message.ID, message.SenderID, message.ReceiverID, message.Content).Scan(&message.CreatedAt)
 	if err != nil {
 		http.Error(w, "Failed to save message", http.StatusInternalServerError)
 		return
 	}
 
-	var message models.Message
-	err = database.DB.QueryRow(`
-		SELECT m.id, m.sender_id, sender.nickname, m.receiver_id, m.content, m.created_at
-		FROM messages m
-		JOIN users sender ON sender.id = m.sender_id
-		WHERE m.id = ?
-	`, messageID.String()).Scan(
-		&message.ID, &message.SenderID, &message.SenderName,
-		&message.ReceiverID, &message.Content, &message.CreatedAt,
-	)
-	if err != nil {
-		http.Error(w, "Failed to load saved message", http.StatusInternalServerError)
-		return
-	}
-	chatHub.sendMessage(message.ReceiverID, message)
+	chatHub.send(message.ReceiverID, websocketEvent{Type: "message", Message: &message})
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
