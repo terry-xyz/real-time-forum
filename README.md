@@ -1,5 +1,9 @@
 # Real-Time Forum
 
+[![CI](https://github.com/terry-xyz/real-time-forum/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/terry-xyz/real-time-forum/actions/workflows/ci.yml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/terry-xyz/real-time-forum)](go.mod)
+[![License](https://img.shields.io/github/license/terry-xyz/real-time-forum)](LICENSE)
+
 A small forum built with Go, SQLite, and a browser-based single-page interface. Members can publish categorized posts, discuss them in comments, view their profile and chat with other members through real-time direct messages.
 
 ## Features
